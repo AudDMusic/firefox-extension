@@ -12,9 +12,13 @@ After that, you can go to `about:debugging#/runtime/this-firefox` and add a temp
 
 ## Current issues
 
-I wasn't able to make Firefox add the extension permamently, from an archive. I don't know why, help would be welcome in [#1](https://github.com/AudDMusic/firefox-extension/issues/1).
+Help is welcome!
 
-The audio stops playing ater the extension stops recording it until the tab is reloaded, help would be welcome in [#2](https://github.com/AudDMusic/firefox-extension/issues/2).
+[#1](https://github.com/AudDMusic/firefox-extension/issues/1): I wasn't able to make Firefox add the extension permamently, from an archive
+
+[#2](https://github.com/AudDMusic/firefox-extension/issues/2): The audio stops playing ater the extension stops recording it until the tab is reloaded
+
+Firefox doesn't seem to have the browser identity things that Chrome has, so auth is disabled and the AudD API will process only the first 10 requests. Once the extension is ready for release, we'll fix this.
 
 ## Original description
 
