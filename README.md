@@ -4,7 +4,7 @@ The extension is based on the [Music Recognition API](https://audd.io).
 
 ## This is an experimental Firefox version. It won't work by default.
 
-The extension uses Manifest V3; to enable the developer preview for it, as per [some random website probably from Mozilla](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/), you need to go to `about:config`, and:
+The extension uses Manifest V3; to enable the developer preview for it, as per [some website probably related to Mozilla](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/), you need to go to `about:config`, and:
  - Set `extensions.manifestV3.enabled` to `true`.
  - Set `xpinstall.signatures.required` to `false`.
  
@@ -12,9 +12,9 @@ After that, you can go to `about:debugging#/runtime/this-firefox` and add a temp
 
 ## Current issues
 
-I wasn't able to make Firefox add the extension permamently, from an archive. I don't know why, help would be welcome in #1.
+I wasn't able to make Firefox add the extension permamently, from an archive. I don't know why, help would be welcome in [#1](https://github.com/AudDMusic/firefox-extension/issues/1).
 
-The audio stops playing ater the extension stops recording it until the tab is reloaded, help would be welcome in #2.
+The audio stops playing ater the extension stops recording it until the tab is reloaded, help would be welcome in [#2](https://github.com/AudDMusic/firefox-extension/issues/2).
 
 ## Original description
 
