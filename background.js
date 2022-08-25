@@ -260,16 +260,15 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 				chrome.runtime.sendMessage({cmd: "no_audio"});
 				return;
 			}
-
-			chrome.identity.getProfileUserInfo(function(user_info) {
+			// chrome.identity.getProfileUserInfo(function(user_info) {
 				var email = "";
 				var google_id = "";
 				if (chrome.runtime.lastError) {
 					console.log(chrome.runtime.lastError.message);
 					//chrome.runtime.sendMessage({cmd: "popup_login"});
 				} else {
-						email = user_info["email"];
-						google_id = user_info["id"];
+				//		email = user_info["email"];
+				//		google_id = user_info["id"];
 				}
 				var a = function(key, str) {
 					str = atob(str);
@@ -360,7 +359,7 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 				} else {
 					g_recognizer_client.start(info, storageCache.record_length);
 				}
-			});
+			//});
 
             break;
         case "success_post":
