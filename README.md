@@ -1,8 +1,22 @@
-# Music Recognition Chrome extension
+# Music Recognition Firefox extension
 
 The extension is based on the [Music Recognition API](https://audd.io).
 
-<a target="_blank" href="https://audd.app/chrome">![Try it now in CWS](https://audd.io/images/chrome-store.png "Click here to install this extension from the Chrome Web Store")</a>
+## This is an experimental Firefox version. It won't work by default.
+
+The extension uses Manifest V3; to enable the developer preview for it, as per [some random website probably from Mozilla](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/), you need to go to `about:config`, and:
+ - Set `extensions.manifestV3.enabled` to `true`.
+ - Set `xpinstall.signatures.required` to `false`.
+ 
+After that, you can go to `about:debugging#/runtime/this-firefox` and add a temporary extension by selecting the `manifest.json`.
+
+## Current issues
+
+I wasn't able to make Firefox add the extension permamently, from an archive. I don't know why, help would be welcome in #1.
+
+The audio stops playing ater the extension stops recording it until the tab is reloaded, help would be welcome in #2.
+
+### Original description
 
 Recognize any music from any website in your browser
 Install the AudD extension and click on its icon to identify the song playing on the current tab.
