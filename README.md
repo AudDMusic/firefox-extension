@@ -16,7 +16,7 @@ I wasn't able to make Firefox add the extension permamently, from an archive. I 
 
 The audio stops playing ater the extension stops recording it until the tab is reloaded, help would be welcome in #2.
 
-### Original description
+## Original description
 
 Recognize any music from any website in your browser
 Install the AudD extension and click on its icon to identify the song playing on the current tab.
