@@ -107,6 +107,7 @@ function RecognizerController(popup_view) {
         cancel();
 		chrome.windows.getCurrent(w => {
 		  chrome.tabs.query({active: true, windowId: w.id}, tabs => {
+			console.log(tabs);
 			chrome.runtime.sendMessage({cmd: "background_start", tab: tabs[0]});
 		  });
 		});
@@ -118,6 +119,13 @@ function RecognizerController(popup_view) {
 
     var init = function() {
         chrome.runtime.sendMessage({cmd: "background_init"});
+		if(_is_firefox) {
+		chrome.windows.getCurrent(w => {
+		  chrome.tabs.query({active: true, windowId: w.id}, tabs => {
+			inject_firefox(tabs);
+		  });
+		});
+		}
     };
 
     var clear_history = function() {
@@ -140,6 +148,9 @@ function RecognizerController(popup_view) {
 					audio_start(request.record_length);
 					_popup_view.start();
 					break;
+				case "firefox_ondataavailable":
+					_audio_recorder.OnDataAvailable(request.result);
+					return;
 				case "get_config":
 					get_config();
 					break;
@@ -465,22 +476,39 @@ function MediaRecorderWrapper(user_media_stream) {
     };
 }
 
+	var _is_firefox = chrome.tabCapture === undefined;
+
 function AudioRecorder() {
 
     var _is_recording = false;
     var _record_time_ms = 0;
     var _media_recorder_handler = null;
+	
+	if(_is_firefox) {
+		console.log("Hi, Firefox!");
+	}
 
     var is_recording = function() {
         return _is_recording;
     }
+	var OnDataAvailable = function (audio_buffer_obj) {
+		if (audio_buffer_obj['status'] != 0) {
+			chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": audio_buffer_obj['data']}});
+			return;
+		}
+		OnRecordedAudio(audio_buffer_obj['data']);
+	};
     var start = function(record_time_ms) {
         if (_is_recording) {
             console.log("_is_recording=" + _is_recording);
             return;
         }
+		if(_is_firefox) {
+			chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_start", data: record_time_ms});
+			return;
+		}
+		
         _is_recording = true;
-
         chrome.tabCapture.capture({
             audio : true,
             video : false
@@ -505,13 +533,7 @@ function AudioRecorder() {
 
             _media_recorder_handler = new MediaRecorderWrapper(audio_stream);
 
-            _media_recorder_handler.ondataavailable = function (audio_buffer_obj) {
-				if (audio_buffer_obj['status'] != 0) {
-					chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": audio_buffer_obj['data']}});
-					return;
-				}
-				OnRecordedAudio(audio_buffer_obj['data']);
-            };
+            _media_recorder_handler.ondataavailable = OnDataAvailable;
             if(!_media_recorder_handler.start(record_time_ms)) {
 				chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": "start error: can not record audio."}});
             }
@@ -519,6 +541,10 @@ function AudioRecorder() {
     };
 
     var stop = function() {
+		if(_is_firefox) {
+			chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_stop"});
+			return;
+		}
         console.log("stopping _media_recorder_handler");
         _media_recorder_handler.stop();
         _is_recording = false;
@@ -527,8 +553,319 @@ function AudioRecorder() {
     return {
         start: start,
         stop: stop,
-        is_recording: is_recording
+        is_recording: is_recording,
+        OnDataAvailable: OnDataAvailable
     };
+}
+
+var _tab_id;
+function inject_firefox(tabs){
+	if(tabs.length == 0) {
+	  console.log("can't find the tab");
+	}
+	_tab_id = tabs[0].id;
+	console.log(_tab_id);
+	try {
+		chrome.scripting.executeScript(
+			{
+			  target: {tabId: _tab_id, allFrames: true},
+			  func: getAudioVideoFirefox,
+			  args: [],
+			});
+	} catch (err) {
+		console.error(`failed to execute script: ${err}`);
+	}
+}
+
+function getAudioVideoFirefox() {
+	var AudDRecorder = function(){
+	var counter = 0;
+    var _is_recording = false;
+    var _media_recorder_handler = null;
+	var MediaRecorderWrapper = function(user_media_stream) {
+
+    var _user_media_stream = user_media_stream;
+    var _media_stream = null;
+    var _mime_type = 'audio/webm';
+    if (typeof window.InstallTrigger !== 'undefined') {
+        _mime_type = 'audio/ogg';
+    }
+    var _media_recorder = null;
+
+    var _is_opera = !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0;
+    var _is_chrome = !!window.chrome && !_is_opera;
+    var _is_firefox = typeof window.InstallTrigger !== 'undefined';
+
+    var _is_recording = false;
+
+    var _dom_interval_handler = null;
+
+    var self = this;
+
+    function is_MediaRecorder_compatible() {
+        if (_is_firefox) {
+            return true;
+        }
+        if (!_is_chrome) {
+            return false;
+        }
+
+        var t_offset = -1;
+        var version_str = navigator.userAgent;
+        console.log(version_str);
+
+        if ((t_offset = version_str.indexOf('Chrome')) !== -1) {
+            version_str = version_str.substring(t_offset + 7);
+        }
+        if ((t_offset = version_str.indexOf(';')) !== -1) {
+            version_str = version_str.substring(0, t_offset);
+        }
+        if ((t_offset = version_str.indexOf(' ')) !== -1) {
+            version_str = version_str.substring(0, t_offset);
+        }
+
+        var major_version = parseInt('' + version_str, 10);
+
+        if (isNaN(major_version)) {
+            major_version = parseInt(navigator.appVersion, 10);
+        }
+
+        console.log(major_version);
+
+        return major_version >= 49;
+    }
+
+    this.start = function(record_time_ms) {
+        if (_is_recording) {
+            return true;
+        }
+        _is_recording = true;
+        var _MediaStream = window.MediaStream;
+        if (typeof _MediaStream === 'undefined' && typeof webkitMediaStream !== 'undefined') {
+            _MediaStream = webkitMediaStream;
+        }
+        if (typeof _MediaStream === 'undefined' || !_MediaStream) {
+            console.error("_MediaStream === 'undefined'");
+            return false;
+        }
+
+        if (_user_media_stream.getAudioTracks().length <= 0) {
+            console.error("_user_media_stream.getAudioTracks().length <= 0");
+            return false;
+        }
+
+        if (!!navigator.mozGetUserMedia) {
+            _media_stream = new _MediaStream();
+            _media_stream.addTrack(_user_media_stream.getAudioTracks()[0]);
+        } else {
+            // webkitMediaStream
+            _media_stream = new _MediaStream(_user_media_stream.getAudioTracks());
+        }
+
+        var recorder_hints = {
+            mimeType: _mime_type
+        };
+
+        if (!is_MediaRecorder_compatible()) {
+            // to support video-only recording on stable
+            recorder_hints = 'video/vp8';
+        }
+
+        // http://dxr.mozilla.org/mozilla-central/source/content/media/MediaRecorder.cpp
+        // https://wiki.mozilla.org/Gecko:MediaRecorder
+        // https://dvcs.w3.org/hg/dap/raw-file/default/media-stream-capture/MediaRecorder.html
+        // starting a recording session; which will initiate "Reading Thread"
+        // "Reading Thread" are used to prevent main-thread blocking scenarios
+        try {
+            _media_recorder = new MediaRecorder(_media_stream, recorder_hints);
+        } catch (e) {
+            // if someone passed NON_supported mimeType
+            // or if Firefox on Android
+            _media_recorder = new MediaRecorder(_media_stream);
+        }
+
+        if ('canRecordMimeType' in _media_recorder && _media_recorder.canRecordMimeType(_mime_type) === false) {
+            console.warn('MediaRecorder API seems unable to record mimeType:', _mime_type);
+            return false;
+        }
+
+        // i.e. stop recording when <video> is paused by the user; and auto restart recording
+        // when video is resumed. E.g. yourStream.getVideoTracks()[0].muted = true; // it will auto-stop recording.
+        //mediaRecorder.ignoreMutedMedia = self.ignoreMutedMedia || false;
+        // Dispatching OnDataAvailable Handler
+        _media_recorder.ondataavailable = function(e) {
+            if (!_is_recording) {
+                console.log("MediaRecorderWrapper record have stopped.");
+                return;
+            }
+
+            var ret = {"status":0, "data": new Blob([e.data], {type: _mime_type})};
+            if (!e.data || !e.data.size || e.data.size < 26800) {
+                ret = {"status":-1, "data": "audio none: can not record audio."};
+            }
+
+            self.ondataavailable(ret);
+        };
+
+        _media_recorder.onerror = function(error) {
+            console.error(error.name);
+
+            self.ondataavailable({"status":-1, "data": error.name + ": can't record audio. Please make sure you're using the latest browser and OS versions."});
+
+            if (_media_recorder) {
+                _media_recorder.stop();
+            }
+        };
+
+        // void start(optional long mTimeSlice)
+        // The interval of passing encoded data from EncodedBufferCache to onDataAvailable
+        // handler. "mTimeSlice < 0" means Session object does not push encoded data to
+        // onDataAvailable, instead, it passive wait the client side pull encoded data
+        // by calling requestData API.
+        try {
+            _media_recorder.start(3.6e+6);
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+
+        _dom_interval_handler = setInterval(function() {
+            if (!_is_recording) {
+                return;
+            }
+
+            if (!_media_recorder) {
+                return;
+            }
+            if (_media_recorder.state === 'recording') {
+                _media_recorder.requestData();
+            }
+        }, record_time_ms);
+
+        return true;
+    };
+
+
+    this.stop = function() {
+        console.log("MediaRecorderWrapper stop");
+
+        if (!_is_recording) {
+            return;
+        }
+
+        _is_recording = false;
+        if (_dom_interval_handler) {
+            clearInterval(_dom_interval_handler);
+            _dom_interval_handler = null;
+        }
+
+        if (_media_recorder && _media_recorder.state === 'recording') {
+            _media_recorder.stop();
+            try {
+                _user_media_stream.getAudioTracks()[0].stop();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    };
+
+    this.ondataavailable = function(blob) {
+        console.log('recorded-blob', blob);
+    };
+};
+	var start = function(record_time_ms) {
+        if (_is_recording) {
+            console.log("_is_recording=" + _is_recording);
+            return;
+        }
+        _is_recording = true;
+		counter++;
+		console.log("starting firefox audio capture", counter);
+		const els = Array.from(document.querySelectorAll('audio, video')).filter(media => !media.paused);
+		if (els.length === 0) {
+			chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "text": "start error: can't find any unpaused media elements."}});
+			return;
+		}
+		var media = els[0];
+		
+		if (
+			media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+			|| media.paused
+		) {
+			_is_recording = false;
+			return;
+		}
+		let stream;
+		if (media.captureStream) {
+			stream = media.captureStream()
+		} else if (media.mozCaptureStream) {
+			stream = media.mozCaptureStream()
+		}
+		
+		AudioContext = window.AudioContext || window.webkitAudioContext;
+		const audioCtx = window.AudDContext || new AudioContext()
+		if (!window.AudDContext) {
+			try {
+				const source = audioCtx.createMediaStreamSource(stream)
+				source.connect(audioCtx.destination)
+			} catch(e) {console.log(e);}
+		}
+		window.AudDContext = audioCtx;
+		
+		/*var AudioContext = window.AudioContext || window.webkitAudioContext;
+		var audioCtx = new AudioContext();
+		var source = audioCtx.createMediaStreamSource(stream);
+		source.connect(audioCtx.destination);*/
+		
+		const pureAudioStream = new MediaStream(stream.getAudioTracks());
+		
+			if(record_time_ms == 0) {
+				console.log("Recording length isn't set");
+				_is_recording = false;
+				return;
+			}
+			console.log(pureAudioStream);
+
+            _media_recorder_handler = new MediaRecorderWrapper(pureAudioStream);
+
+            _media_recorder_handler.ondataavailable = function (audio_buffer_obj) {
+				console.log(audio_buffer_obj);
+				chrome.runtime.sendMessage({cmd: "firefox_ondataavailable", result: audio_buffer_obj});
+            };
+			console.log("starting recording");
+            if(!_media_recorder_handler.start(record_time_ms)) {
+				chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "text": "start error: can not record audio."}});
+            }
+	}
+    var stop = function() {
+        console.log("stopping firefox _media_recorder_handler");
+        _media_recorder_handler.stop();
+        _is_recording = false;
+    };
+	chrome.runtime.onMessage.addListener(
+	  function(request, sender, sendResponse) {
+		  console.log(request);
+		switch (request.cmd) {
+			case 'to_firefox_start':
+				start(request.data);
+				break;
+			case 'to_firefox_stop':
+				stop();
+				break;
+			
+		}
+		return true;
+	  }
+	);
+	};
+	if(window.AudDReorder === undefined)
+	{
+		window.AudDReorder = AudDRecorder;
+		console.log("injected firefox");
+	}
+	window.AudDReorder();
+	
+  return [];
 }
 
 
