@@ -582,6 +582,8 @@ function audioRecorderFirefox() {
 	var counter = 0;
     var is_recording = false;
     var _media_recorder_handler = null;
+	var last_src = "";
+	
 	var MediaRecorderWrapper = function(user_media_stream) {
 
     var _user_media_stream = user_media_stream;
@@ -640,17 +642,17 @@ function audioRecorderFirefox() {
             return true;
         }
         _is_recording = true;
-        var _MediaStream = window.MediaStream;
+        if (_user_media_stream.getAudioTracks().length <= 0) {
+            console.error("_user_media_stream.getAudioTracks().length <= 0");
+            return false;
+        }
+		
+        /*var _MediaStream = window.MediaStream;
         if (typeof _MediaStream === 'undefined' && typeof webkitMediaStream !== 'undefined') {
             _MediaStream = webkitMediaStream;
         }
         if (typeof _MediaStream === 'undefined' || !_MediaStream) {
             console.error("_MediaStream === 'undefined'");
-            return false;
-        }
-
-        if (_user_media_stream.getAudioTracks().length <= 0) {
-            console.error("_user_media_stream.getAudioTracks().length <= 0");
             return false;
         }
 
@@ -660,7 +662,7 @@ function audioRecorderFirefox() {
         } else {
             // webkitMediaStream
             _media_stream = new _MediaStream(_user_media_stream.getAudioTracks());
-        }
+        }*/
 
         var recorder_hints = {
             mimeType: _mime_type
@@ -677,11 +679,11 @@ function audioRecorderFirefox() {
         // starting a recording session; which will initiate "Reading Thread"
         // "Reading Thread" are used to prevent main-thread blocking scenarios
         try {
-            _media_recorder = new MediaRecorder(_media_stream, recorder_hints);
+            _media_recorder = new MediaRecorder(_user_media_stream, recorder_hints);
         } catch (e) {
             // if someone passed NON_supported mimeType
             // or if Firefox on Android
-            _media_recorder = new MediaRecorder(_media_stream);
+            _media_recorder = new MediaRecorder(_user_media_stream);
         }
 
         if ('canRecordMimeType' in _media_recorder && _media_recorder.canRecordMimeType(_mime_type) === false) {
@@ -761,11 +763,11 @@ function audioRecorderFirefox() {
 
         if (_media_recorder && _media_recorder.state === 'recording') {
             _media_recorder.stop();
-            /*try {
-                _user_media_stream.getAudioTracks()[0].stop();
+            try {
+                //_user_media_stream.getAudioTracks()[0].stop();
             } catch (e) {
                 console.error(e);
-            }*/
+            }
         }
     };
 
@@ -774,12 +776,11 @@ function audioRecorderFirefox() {
     };
 };
 	var start = function(record_time_ms) {
-        if (is_recording) {
+        if (is_recording && record_time_ms != 0) {
             console.log("is_recording=" + is_recording);
             return;
         }
         is_recording = true;
-        started = true;
 		counter++;
 		console.log("starting firefox audio capture", counter);
 		const els = Array.from(document.querySelectorAll('audio, video')).filter(media => !media.paused);
@@ -789,6 +790,11 @@ function audioRecorderFirefox() {
 			return;
 		}
 		var media = els[0];
+		media.onplay = (event) => {
+			console.log('media.onplay');
+			start(0);
+			stop();
+		};
 		
 		if (
 			media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
@@ -806,13 +812,17 @@ function audioRecorderFirefox() {
 		
 		AudioContext = window.AudioContext || window.webkitAudioContext;
 		const audioCtx = window.AudDContext || new AudioContext()
-		if (!window.AudDContext) {
+		if (media.src != "" && last_src != media.src) {
 			try {
-				const source = audioCtx.createMediaStreamSource(stream)
-				source.connect(audioCtx.destination)
+				const source = audioCtx.createMediaStreamSource(stream);
+				source.connect(audioCtx.destination);
+				console.log("connected the stream");
+				console.log(stream);
+				console.log(audioCtx);
+				last_src = media.src;
 			} catch(e) {console.log(e);}
 		}
-		window.AudDContext = audioCtx;
+		//window.AudDContext = audioCtx;
 		
 		
 		/*var AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -845,7 +855,6 @@ function audioRecorderFirefox() {
         console.log("stopping firefox _media_recorder_handler");
         _media_recorder_handler.stop();
         is_recording = false;
-        started = false;
     };
 	chrome.runtime.onMessage.addListener(
 	  function onMessage(request, sender, sendResponse) {
@@ -868,16 +877,44 @@ function audioRecorderFirefox() {
 		return true;
 	  }
 	);
+	
+		// fixes the wierd bug of audio stopping working on YouTube after navigating to a different video
+		window.addEventListener('locationchange', function () {
+			console.log('location changed!');
+			start(0);
+		});
+		window.addEventListener('popstate', function () {
+			console.log('location changed via popstate!');
+			start(0);
+		});
+		window.onmouseup = (event) => {
+			console.log('location possibly changed via onmouseup!');
+			start(0);
+			stop();
+		};
+		new MutationObserver(function(mutations) {
+			console.log('location possibly changed (the title has changed)!');
+			start(0);
+		}).observe(
+			document.querySelector('title'),
+			{ subtree: true, characterData: true, childList: true }
+		);
+		new MutationObserver(function(mutations) {
+			console.log('location possibly changed (the video has changed)!');
+			start(0);
+		}).observe(
+			document.querySelector('video'),
+			{ subtree: true, characterData: true, childList: true }
+		);
 	};
 	if(window.AudDRecorder === undefined)
 	{
 		window.AudDRecorder = AudDRecorder;
 		console.log("injected firefox");
 	} else {
-		console.log("got called after injection");
+		console.log("already injected in firefox");
 	}
-	window.AudDRecorder();
-	
+	AudDRecorder();
   return [];
 }
 
