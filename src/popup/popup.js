@@ -761,11 +761,11 @@ function getAudioVideoFirefox() {
 
         if (_media_recorder && _media_recorder.state === 'recording') {
             _media_recorder.stop();
-            try {
+            /*try {
                 _user_media_stream.getAudioTracks()[0].stop();
             } catch (e) {
                 console.error(e);
-            }
+            }*/
         }
     };
 
