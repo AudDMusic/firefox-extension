@@ -568,8 +568,8 @@ function inject_firefox(tabs){
 	try {
 		chrome.scripting.executeScript(
 			{
-			  target: {tabId: _tab_id, allFrames: true},
-			  func: getAudioVideoFirefox,
+			  target: {tabId: _tab_id, allFrames: false},
+			  func: audioRecorderFirefox,
 			  args: [],
 			});
 	} catch (err) {
@@ -577,10 +577,10 @@ function inject_firefox(tabs){
 	}
 }
 
-function getAudioVideoFirefox() {
+function audioRecorderFirefox() {
 	var AudDRecorder = function(){
 	var counter = 0;
-    var _is_recording = false;
+    var is_recording = false;
     var _media_recorder_handler = null;
 	var MediaRecorderWrapper = function(user_media_stream) {
 
@@ -774,15 +774,17 @@ function getAudioVideoFirefox() {
     };
 };
 	var start = function(record_time_ms) {
-        if (_is_recording) {
-            console.log("_is_recording=" + _is_recording);
+        if (is_recording) {
+            console.log("is_recording=" + is_recording);
             return;
         }
-        _is_recording = true;
+        is_recording = true;
+        started = true;
 		counter++;
 		console.log("starting firefox audio capture", counter);
 		const els = Array.from(document.querySelectorAll('audio, video')).filter(media => !media.paused);
 		if (els.length === 0) {
+			is_recording = false;
 			chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "text": "start error: can't find any unpaused media elements."}});
 			return;
 		}
@@ -792,7 +794,7 @@ function getAudioVideoFirefox() {
 			media.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
 			|| media.paused
 		) {
-			_is_recording = false;
+			is_recording = false;
 			return;
 		}
 		let stream;
@@ -812,21 +814,23 @@ function getAudioVideoFirefox() {
 		}
 		window.AudDContext = audioCtx;
 		
+		
 		/*var AudioContext = window.AudioContext || window.webkitAudioContext;
 		var audioCtx = new AudioContext();
 		var source = audioCtx.createMediaStreamSource(stream);
 		source.connect(audioCtx.destination);*/
 		
-		const pureAudioStream = new MediaStream(stream.getAudioTracks());
 		
 			if(record_time_ms == 0) {
 				console.log("Recording length isn't set");
-				_is_recording = false;
+				is_recording = false;
 				return;
 			}
-			console.log(pureAudioStream);
+			console.log(stream);
+		 
 
-            _media_recorder_handler = new MediaRecorderWrapper(pureAudioStream);
+             let pureAudioStream = new MediaStream(stream.getAudioTracks())
+			_media_recorder_handler = new MediaRecorderWrapper(pureAudioStream);
 
             _media_recorder_handler.ondataavailable = function (audio_buffer_obj) {
 				console.log(audio_buffer_obj);
@@ -840,10 +844,11 @@ function getAudioVideoFirefox() {
     var stop = function() {
         console.log("stopping firefox _media_recorder_handler");
         _media_recorder_handler.stop();
-        _is_recording = false;
+        is_recording = false;
+        started = false;
     };
 	chrome.runtime.onMessage.addListener(
-	  function(request, sender, sendResponse) {
+	  function onMessage(request, sender, sendResponse) {
 		  console.log(request);
 		switch (request.cmd) {
 			case 'to_firefox_start':
@@ -851,6 +856,12 @@ function getAudioVideoFirefox() {
 				break;
 			case 'to_firefox_stop':
 				stop();
+				/*window.AudDContext = undefined;
+				window.AudDRecorder = undefined;
+				AudDRecorder = undefined;
+				FirefoxAudioRecording = undefined;
+				_media_recorder_handler = undefined;
+				chrome.runtime.onMessage.removeListener(onMessage);*/
 				break;
 			
 		}
@@ -858,12 +869,14 @@ function getAudioVideoFirefox() {
 	  }
 	);
 	};
-	if(window.AudDReorder === undefined)
+	if(window.AudDRecorder === undefined)
 	{
-		window.AudDReorder = AudDRecorder;
+		window.AudDRecorder = AudDRecorder;
 		console.log("injected firefox");
+	} else {
+		console.log("got called after injection");
 	}
-	window.AudDReorder();
+	window.AudDRecorder();
 	
   return [];
 }
