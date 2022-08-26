@@ -5,14 +5,20 @@ The extension is based on the [Music Recognition API](https://audd.io).
 ## This is an experimental Firefox version. It won't work by default.
 
 The extension uses Manifest V3; to enable the developer preview for it, as per [some website probably related to Mozilla](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/), you need to go to `about:config`, and:
- - Set `extensions.manifestV3.enabled` to `true`.
- - Set `xpinstall.signatures.required` to `false`.
+ 1. Set `extensions.manifestV3.enabled` to `true`.
+ 2. Set `xpinstall.signatures.required` to `false`.
  
-After that, you can go to `about:debugging#/runtime/this-firefox` and add a temporary extension by selecting the `manifest.json`. Or install permamently on Firefox Developer Edition (on `about:addons`, install from a ZIP file containing the extension files, with `manifest.json` in the root).
+After that:
+
+- On the regular Firefox, go to `about:debugging#/runtime/this-firefox` and add a temporary extension by selecting the `manifest.json`. Note that it will be removed when you close the browser, and the history and the settings will be lost.
+
+- On Firefox Developer Edition, go to `about:addons` and install from a ZIP file containing the extension files, with `manifest.json` in the root).
+
+Once Manifest V3 is supported by addons.mozilla.org, we'll publish the extension there.
 
 ## Current issues
 
-Help is welcome!
+Help will be appreciated.
 
 - [Audio stops working on video changes if the extension was open](https://github.com/AudDMusic/firefox-extension/issues/4).
 
