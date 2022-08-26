@@ -8,7 +8,7 @@ The extension uses Manifest V3; to enable the developer preview for it, as per [
  - Set `extensions.manifestV3.enabled` to `true`.
  - Set `xpinstall.signatures.required` to `false`.
  
-After that, you can go to `about:debugging#/runtime/this-firefox` and add a temporary extension by selecting the `manifest.json`.
+After that, you can go to `about:debugging#/runtime/this-firefox` and add a temporary extension by selecting the `manifest.json`. Or install permamently on Firefox Developer Edition (on `about:addons`, install from a ZIP file containing the extension files, with `manifest.json` in the root).
 
 ## Current issues
 
