@@ -24,6 +24,8 @@ Help will be appreciated.
 
 - Firefox doesn't seem to have the browser identity things that Chrome has, so auth is disabled and the AudD API will process only the first 10 requests. Once the extension is ready for release, we'll fix this.
 
+**To send more than 10 requests to the API**, without the browser auth implemented in some form, you need to create an account at [dashboard.audd.io](https://dashboard.audd.io). You'll get 300 requests for two weeks for free, without needing to attach a card or anything. For more, just send an email to api@audd.io, we'll give you a lot more free requests and subscription time. Sorry about that!
+
 ## Original description
 
 Recognize any music from any website in your browser
