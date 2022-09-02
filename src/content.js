@@ -29,8 +29,8 @@ function audioRecorderFirefox() {
 					);
 				},
 				stop() {
-					if (audio_recorder.state === "recording")
-						audio_recorder.stop();
+					if (REC.audio_recorder.state === "recording")
+						REC.audio_recorder.stop();
 				},
 				create_audio_context(m_elm) {
 					const a_ctx = new AudioContext();
@@ -54,7 +54,9 @@ function audioRecorderFirefox() {
 				},
 				audio_recorder_add_track() {
 					const m_cap_tracks = REC.audio_capture_stream.getAudioTracks();
+					if(m_cap_tracks.length <= 0) return false;
 					REC.audio_recorder.stream.addTrack(m_cap_tracks[0]);
+					return true;
 				},
 				async start(rec_time_ms = 2000, mime = 'audio/webm') {
 					REC.audio_mime = mime;
@@ -68,7 +70,8 @@ function audioRecorderFirefox() {
 					} else if (REC.audio_recorder.stream.active === false) {
 						/* Track has changed and new is not loaded
 						 * automatically. Load new track */
-						REC.audio_recorder_add_track();
+						if(!REC.audio_recorder_add_track())
+							return Promise.reject('no_media');
 					}
 					if ('canRecordMimeType' in REC.audio_recorder && REC.audio_recorder.canRecordMimeType(mime) === false) {
 						console.warn('MediaRecorder API seems unable to record mimeType:', mime);
