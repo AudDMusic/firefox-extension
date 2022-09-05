@@ -107,6 +107,7 @@ function RecognizerController(popup_view) {
         cancel();
 		chrome.windows.getCurrent(w => {
 		  chrome.tabs.query({active: true, windowId: w.id}, tabs => {
+			console.log(tabs);
 			chrome.runtime.sendMessage({cmd: "background_start", tab: tabs[0]});
 		  });
 		});
@@ -118,6 +119,13 @@ function RecognizerController(popup_view) {
 
     var init = function() {
         chrome.runtime.sendMessage({cmd: "background_init"});
+		if(_is_firefox) {
+		chrome.windows.getCurrent(w => {
+		  chrome.tabs.query({active: true, windowId: w.id}, tabs => {
+			inject_firefox(tabs);
+		  });
+		});
+		}
     };
 
     var clear_history = function() {
@@ -140,6 +148,9 @@ function RecognizerController(popup_view) {
 					audio_start(request.record_length);
 					_popup_view.start();
 					break;
+				case "firefox_ondataavailable":
+					_audio_recorder.OnDataAvailable(request.result);
+					return;
 				case "get_config":
 					get_config();
 					break;
@@ -199,6 +210,7 @@ function RecognizerController(popup_view) {
                 _popup_view.stop();
             }
             _popup_view.refresh();
+			return;
         });
 		
     return {
@@ -465,22 +477,39 @@ function MediaRecorderWrapper(user_media_stream) {
     };
 }
 
+	var _is_firefox = chrome.tabCapture === undefined;
+
 function AudioRecorder() {
 
     var _is_recording = false;
     var _record_time_ms = 0;
     var _media_recorder_handler = null;
+	
+	if(_is_firefox) {
+		console.log("Hi, Firefox!");
+	}
 
     var is_recording = function() {
         return _is_recording;
     }
+	var OnDataAvailable = function (audio_buffer_obj) {
+		if (audio_buffer_obj['status'] != 0) {
+			chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": audio_buffer_obj['data']}});
+			return;
+		}
+		OnRecordedAudio(audio_buffer_obj['data']);
+	};
     var start = function(record_time_ms) {
         if (_is_recording) {
             console.log("_is_recording=" + _is_recording);
             return;
         }
+		if(_is_firefox) {
+			chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_start", data: record_time_ms});
+			return;
+		}
+		
         _is_recording = true;
-
         chrome.tabCapture.capture({
             audio : true,
             video : false
@@ -505,13 +534,7 @@ function AudioRecorder() {
 
             _media_recorder_handler = new MediaRecorderWrapper(audio_stream);
 
-            _media_recorder_handler.ondataavailable = function (audio_buffer_obj) {
-				if (audio_buffer_obj['status'] != 0) {
-					chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": audio_buffer_obj['data']}});
-					return;
-				}
-				OnRecordedAudio(audio_buffer_obj['data']);
-            };
+            _media_recorder_handler.ondataavailable = OnDataAvailable;
             if(!_media_recorder_handler.start(record_time_ms)) {
 				chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": "start error: can not record audio."}});
             }
@@ -519,6 +542,10 @@ function AudioRecorder() {
     };
 
     var stop = function() {
+		if(_is_firefox) {
+			chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_stop"});
+			return;
+		}
         console.log("stopping _media_recorder_handler");
         _media_recorder_handler.stop();
         _is_recording = false;
@@ -527,8 +554,27 @@ function AudioRecorder() {
     return {
         start: start,
         stop: stop,
-        is_recording: is_recording
+        is_recording: is_recording,
+        OnDataAvailable: OnDataAvailable
     };
+}
+
+var _tab_id;
+function inject_firefox(tabs){
+	if(tabs.length == 0) {
+	  console.log("can't find the tab");
+	}
+	_tab_id = tabs[0].id;
+	console.log(_tab_id);
+	try {
+		chrome.scripting.executeScript(
+			{
+			  target: {tabId: _tab_id, allFrames: false},
+			  files: ['src/content.js'],
+			});
+	} catch (err) {
+		console.error(`failed to execute script: ${err}`);
+	}
 }
 
 
