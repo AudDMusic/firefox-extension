@@ -6,6 +6,12 @@
   "manifest_version": 3,
   "author": "app@audd.io",
   "version": "3.1.4",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "firefox@audd.io",
+      "strict_min_version": "104.0"
+    }
+  },
   "background": {
     "scripts": ["background.js"]
   },
