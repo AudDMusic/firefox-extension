@@ -6,9 +6,8 @@
   "manifest_version": 3,
   "author": "app@audd.io",
   "version": "3.1.4",
-
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"]
   },
    "content_scripts": [ {
       "js": [ "src/content.js" ],
@@ -42,6 +41,7 @@
     "unlimitedStorage",
     "background",
     "activeTab",
+    "scripting",
     "tabCapture",
     "notifications" ]
 }

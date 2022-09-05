@@ -1,8 +1,32 @@
-# Music Recognition Chrome extension
+# Music Recognition Firefox extension
 
 The extension is based on the [Music Recognition API](https://audd.io).
 
-<a target="_blank" href="https://audd.app/chrome">![Try it now in CWS](https://audd.io/images/chrome-store.png "Click here to install this extension from the Chrome Web Store")</a>
+## This is an experimental Firefox version. It won't work by default.
+
+The extension uses Manifest V3; to enable the developer preview for it, as per [some website probably related to Mozilla](https://extensionworkshop.com/documentation/develop/manifest-v3-migration-guide/), you need to go to `about:config`, and:
+ 1. Set `extensions.manifestV3.enabled` to `true`.
+ 2. Set `xpinstall.signatures.required` to `false`.
+ 
+After that:
+
+- On the regular Firefox, go to `about:debugging#/runtime/this-firefox` and add a temporary extension by selecting the `manifest.json`. Note that it will be removed when you close the browser, and the history and the settings will be lost.
+
+- On Firefox Developer Edition, go to `about:addons` and install from a ZIP file containing the extension files, with `manifest.json` in the root).
+
+Once Manifest V3 is supported by addons.mozilla.org, we'll publish the extension there.
+
+## Current issues
+
+Help will be appreciated.
+
+- [Audio stops working on video changes if the extension was open](https://github.com/AudDMusic/firefox-extension/issues/4).
+
+- Firefox doesn't seem to have the browser identity things that Chrome has, so auth is disabled and the AudD API will process only the first 10 requests. Once the extension is ready for release, we'll fix this.
+
+**To send more than 10 requests to the API**, without the browser auth implemented in some form, you need to create an account at [dashboard.audd.io](https://dashboard.audd.io). You'll get 300 requests for two weeks for free, without needing to attach a card or anything. For more, just send an email to api@audd.io, we'll give you a lot more free requests and subscription time. Sorry about that!
+
+## Original description
 
 Recognize any music from any website in your browser
 Install the AudD extension and click on its icon to identify the song playing on the current tab.
