@@ -1,0 +1,82 @@
+{
+  "appName": {
+    "message": "АудД® музичко препознавање",
+    "description": "The title of the application, displayed in the web store."
+  },
+  "appDesc": {
+    "message": "Препознајте било коју музику са било које веб локације у вашем претраживачу",
+    "description": "The description of the application, displayed in the web store."
+  },
+  "selectOneTab": {
+    "message": "Изаберите једну картицу"
+  },
+  "noAudioOnTab": {
+    "message": "Нема звука на тренутној картици"
+  },
+  "lyrics": {
+    "message": "Текст"
+  },
+  "history": {
+    "message": "Историја"
+  },
+  "settings": {
+    "message": "Подешавања"
+  },
+  "goTo": {
+    "message": "Иди на"
+  },
+  "confirm": {
+    "message": "Потврди"
+  },
+  "yes": {
+    "message": "да"
+  },
+  "confirmQuestion": {
+    "message": "Ова акција је неповратна. Да ли сте сигурни да желите да обришете историју?"
+  },
+  "no": {
+    "message": "Не"
+  },
+  "signIn": {
+    "message": "Молимо, <a url=\"chrome://chrome-signin/\" href=\"#\">пријавите се са својим Гоогле налогом</a> у Гоогле Цхроме-у"
+  },
+  "noLyrics": {
+    "message": "Није могуће пронаћи ниједан текст за ову песму"
+  },
+  "noMatchesText": {
+    "message": "Жао нам је, нисмо могли да добијемо ниједно подударање"
+  },
+  "playsAt": {
+    "message": "игра на"
+  },
+  "needAuth": {
+    "message": "Да бисте користили АудД на овој веб локацији, морате се пријавити"
+  },
+  "trialEnded": {
+    "message": "Ваше суђење је завршено. На овој веб страници ради само пуна верзија. <a href=\"https://dashboard.audd.io\" target=\"_blank\"> Претплатите се</a>"
+  },
+  "onlyPaidWorksHere": {
+    "message": "Жао нам је, само плаћена верзија ради на овој веб страници. <a href=\"https://dashboard.audd.io\" target=\"_blank\">Набавите токен овде</a> и замените га у подешавањима или размислите о аутоматизацији свог рада помоћу нашег <a href=\"https://audd.io\" target=\"_blank\">АПИ-ја</a>."
+  },
+  "SavedToHistory": {
+    "message": "Сачувано у историји"
+  },
+  "notInvoked": {
+    "message": "Екстензија није позвана за тренутну страницу. Цхроме странице не могу да се сниме. Кликните на картицу и поново покрените проширење."
+  },
+  "tryAgainText": {
+    "message": "Покушајте поново"
+  },
+  "identifiedEarlierText": {
+    "message": "Раније идентификован"
+  },
+  "copiedSuccessfully": {
+    "message": "Копирано!"
+  },
+  "clearHistoryInit": {
+    "message": "Потврдите акцију у обавештењима"
+  },
+  "settingsSaved": {
+    "message": "Подешавања су успешно сачувана"
+  }
+}
