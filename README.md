@@ -2,20 +2,12 @@
 
 The extension is based on the [Music Recognition API](https://audd.io).
 
+<a target="_blank" href="https://audd.cc/firefox">![Try it now on Firefox](https://extensionworkshop.com/assets/img/documentation/publish/get-the-addon-178x60px.dad84b42.png "Click here to install this extension from the addons.mozilla.org")</a>
+
 Recognize any music from any website in your browser
 Install the AudD extension and click on its icon to identify the song playing on the current tab.
 
 You can [install this extension from the Firefox store](https://audd.cc/firefox).
-
-## Current issues
-
-Help will be appreciated.
-
-- [Audio stops working on video changes if the extension was open](https://github.com/AudDMusic/firefox-extension/issues/4).
-
-- Firefox doesn't seem to have the browser identity things that Chrome has, so auth is disabled and the AudD API will process only the first 10 requests. Once the extension is ready for release, we'll fix this.
-
-## What it does
 
 AudD extension:
 - Recognizes the music playing in your browser;
@@ -34,3 +26,7 @@ Watch the video below to see how it works:
 
 [![Demo](https://img.youtube.com/vi/xcASh3kdKp0/maxresdefault.jpg)](https://www.youtube.com/watch?v=xcASh3kdKp0)
 
+
+## Current issues
+
+See the [issues](https://github.com/AudDMusic/firefox-extension/issues).
