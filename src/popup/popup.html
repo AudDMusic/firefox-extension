@@ -63,6 +63,11 @@
 				<div>
 					<h2>History</h2>
 					<p class="text">Click <b id="clean-history">here</b> to clean the recognition history.</p>
+					<div id="clean-history-confirm" style="display: none;">
+						<p class="text" id="confirmQuestion"></p>
+						<button class="button button--outline button--primary" id="clean-history-yes" style="margin-right: 10px;">Yes</button>
+						<button class="button button--outline button--primary" id="clean-history-no">No</button>
+					</div>
 				</div>
 				<br />
 				<button class="button button--outline button--primary" tabindex="0" type="button" id="save_settings">Save</button>
@@ -99,6 +104,13 @@
 					<button class="share-icon" copy-text={{copyText}}><img src="../../icons/copy.svg"></button>
 				</div>
 			</div></div>
+		</div>
+		<div class="patreon-suggestion">
+			<div class="text">Please help us keep the add-on running</div>
+			<div class="patreon-actions">
+				<button class="patreon-button" id="patreon-link">Patreon</button>
+				<button class="patreon-close" id="patreon-close">×</button>
+			</div>
 		</div>
 		<div id="lyrics_body"></div>
 		<a class="saved-to-history" show-on show-on-initial>{{SavedToHistory}}</a>
