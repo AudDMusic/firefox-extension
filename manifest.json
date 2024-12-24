@@ -5,11 +5,11 @@
   "default_locale": "en",
   "manifest_version": 3,
   "author": "app@audd.io",
-  "version": "3.1.4",
+  "version": "3.2.1",
   "browser_specific_settings": {
     "gecko": {
-      "id": "firefox@audd.io",
-      "strict_min_version": "104.0"
+      "id": "firefox@audd.tech",
+      "strict_min_version": "109.0"
     }
   },
   "background": {
@@ -17,7 +17,8 @@
   },
    "content_scripts": [ {
       "js": [ "src/content.js" ],
-      "matches": [ "*://*/*" ]
+      "matches": ["<all_urls>"],
+	  "all_frames": true
    } ],
 
   "action": {
@@ -30,7 +31,8 @@
   },
   "host_permissions": [
     "https://api.audd.io/",
-    "https://www.googleapis.com/"
+    "https://www.googleapis.com/",
+    "<all_urls>"
   ],
   "oauth2": {
 	"client_id": "875741845768-1jga752cov9r774giitn0hbeom6hkh19.apps.googleusercontent.com",
@@ -45,7 +47,9 @@
     "identity.email",
     "storage",
     "unlimitedStorage",
+    "webNavigation",
     "background",
+	"tabs",
     "activeTab",
     "scripting",
     "tabCapture",
