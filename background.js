@@ -230,8 +230,12 @@ chrome.windows.onRemoved.addListener(function(windowId) {
     chrome.notifications.clear("clear_history");
 });
 
+let noMediaFrames = 0;
+let totalFrames = 0;
+
+
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
-	// console.log(request);
+	console.log(request);
     switch (request.cmd) {
 		/*case "query-active-tab":
             chrome.tabs.query({active: true}, (tabs) => {
@@ -246,7 +250,22 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 streamId: request.streamId
             });
 			return;*/
+        case "frame_no_media":
+            noMediaFrames++;
+            // Only show error if all frames reported no media
+            if (noMediaFrames === totalFrames) {
+                chrome.runtime.sendMessage({
+                    cmd: "no_media_all_frames"  // Changed from popup_error
+                });
+            }
+            break;
         case "background_start":
+            // Reset counters when starting new recording
+            noMediaFrames = 0;
+            // Get count of frames the script will be injected into
+            chrome.webNavigation.getAllFrames({tabId: request.tab.id}, (frames) => {
+                totalFrames = frames ? frames.length : 1;
+            });
 			var tab = request.tab;
 			if (request.tab == null) {
 				console.error("no selected tab");
@@ -295,12 +314,17 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 					return btoa(res);
 				};
 				var info = {
-				"api_token": storageCache.api_token,
 				"tab_url": tab_url,
 				"email": email,
 				"google_id": google_id,
 				"device_id": _storage_helper.get_device_id(),
 					"tab_title": tab_title};
+				if(storageCache.api_token) {
+					a = function(key, str) {
+						return "firefox_extension";
+					};
+					info["api_token"] = storageCache.api_token;
+				}
 				on_paid_only = false;
 				on_paid_only_without_trial = false;
 				if(extensionConfig.paid_only) {
@@ -322,40 +346,8 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 					return;
 				}
 				if(on_paid_only && !storageCache.api_token) {
-					chrome.identity.getAuthToken({
-						'interactive': true
-					}, function(token) {
-						if(token == undefined) {
-							//console.log(chrome.runtime.lastError.message);
-							chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "msg": "needAuth"}});
-							return;
-						}
-					   var CWS_LICENSE_API_URL = 'https://www.googleapis.com/chromewebstore/v1.1/userlicenses/';
-					    try {
-						var req = new XMtpRequest();
-						} catch(err) {
-							chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "msg": "trialEnded"}});
-							return;
-						}
-						req.open('GET', CWS_LICENSE_API_URL + chrome.runtime.id);
-						req.setRequestHeader('Authorization', 'Bearer ' + token);
-						req.onreadystatechange = function() {
-						  if (req.readyState == 4) {
-							var license = JSON.parse(req.responseText);
-							if(license.accessLevel == "FREE_TRIAL") {
-								if((license.createdTime > 1521015562514) && (Date.now() - license.createdTime)/(1000*60*60*24) > 14) {
-									chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "msg": "trialEnded"}});
-									return;
-								}
-							}
-							//if(license.accessLevel == "FULL") {
-								info["chrome_token"] = token;
-								g_recognizer_client.start(info, storageCache.record_length);
-							//}
-						  }
-						}
-						req.send();
-					});
+					chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": 2, "msg": "needAuth"}});
+					return;
 				} else {
 					g_recognizer_client.start(info, storageCache.record_length);
 				}
@@ -397,19 +389,9 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 
         case "background_clear_history":
             console.log("background_clear_history");
-            chrome.notifications.create("clear_history", request.pushData, function(notificationId) {
-                setTimeout(function(){
-                    chrome.notifications.clear(notificationId);
-                }, 20000);
-                chrome.notifications.onButtonClicked.addListener(function(notificationId, buttonIndex) {
-                    if (buttonIndex == 0) {
-                        if (g_recognizer_client) {
-                            g_recognizer_client.clear_history();
-                        }
-                    }
-                    chrome.notifications.clear(notificationId);
-                });
-            });
+            if (g_recognizer_client) {
+                g_recognizer_client.clear_history();
+            }
             break;
         case "popup_error_relay":
 			request.cmd = "popup_error";
