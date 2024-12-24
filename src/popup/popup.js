@@ -1,6 +1,8 @@
 var _audio_recorder = new AudioRecorder();
 var _is_recognizing = false;
 var _info = {};
+var _is_starting = false;
+
 function audio_start(record_length) {
 	if (_is_recognizing) {
 		return;
@@ -104,15 +106,23 @@ function RecognizerController(popup_view) {
 
 
     var start = function() {
+        if (_is_starting) {
+            console.log("Start already in progress, ignoring request");
+            return;
+        }
+        
+        _is_starting = true;
         cancel();
-		chrome.windows.getCurrent(w => {
-		  chrome.tabs.query({active: true, windowId: w.id}, tabs => {
-			console.log(tabs);
-			chrome.runtime.sendMessage({cmd: "background_start", tab: tabs[0]});
-		  });
-		});
+        
+        _popup_view.start();
+        
+        chrome.windows.getCurrent(w => {
+            chrome.tabs.query({active: true, windowId: w.id}, tabs => {
+                console.log(tabs);
+                chrome.runtime.sendMessage({cmd: "background_start", tab: tabs[0]});
+            });
+        });
     };
-
     var reload = function() {
         chrome.runtime.sendMessage({cmd: "background_reload"});
     };
@@ -136,7 +146,11 @@ function RecognizerController(popup_view) {
 
     chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
-			// console.log(request);
+            if (request.cmd === "popup_error" || 
+                request.cmd === "start_recording") {
+                _is_starting = false;
+            }
+			console.log(request);
             switch (request.cmd) {
 				case "start_recording":
 					_info = request.info;
@@ -160,6 +174,11 @@ function RecognizerController(popup_view) {
 					start();
 					break;
 					
+                case "no_media_all_frames":
+                    // Only stop the animation if no frames found media
+                    _popup_view.stop();
+                    _popup_view.show_message(chrome.i18n.getMessage("noAudioOnTab"), 2);
+                    break;
                 case "popup_reload":
                     console.log(request);
                     _popup_view.refresh(request.data);
@@ -253,10 +272,24 @@ function init() {
         openScreen("initial");
     });
 
+
     $('#clean-history').on('click', function() {
+        $('#clean-history-confirm').show();
+        $('#clean-history').hide();
+        $('#confirmQuestion').text(chrome.i18n.getMessage("confirmQuestion"));
+        $('#clean-history-yes').text(chrome.i18n.getMessage("yes"));
+        $('#clean-history-no').text(chrome.i18n.getMessage("no"));
+    });
+
+    $('#clean-history-yes').on('click', function() {
         recognizer_controller.clear_history();
-		openScreen("initial");
-		chrome.runtime.sendMessage({cmd: "popup_message_relay", result: {"msg": "clearHistoryInit"}});
+        openScreen("initial");
+        chrome.runtime.sendMessage({cmd: "popup_message_relay", result: {"text": "The history is cleared. Close and open the extension to see the change."}});
+        popup_view.hide_confirm_buttons();
+    });
+
+    $('#clean-history-no').on('click', function() {
+        popup_view.hide_confirm_buttons();
     });
     chrome.runtime.sendMessage({cmd: "get_token"});
 	$('#save_settings').on('click', function() {
@@ -709,6 +742,16 @@ function PopupView() {
 	recordingLengthSlider.oninput = function() {
 	  recordingLengthTextDiv.innerHTML = this.value / 10 + "s";
 	}
+
+    var show_confirm_buttons = function() {
+        $('#clean-history-confirm').show();
+        $('#clean-history').hide();
+    };
+
+    var hide_confirm_buttons = function() {
+        $('#clean-history-confirm').hide();
+        $('#clean-history').show();
+    };
 	
 	var activateScreenButtons = function() {
 		screens.forEach(function(curScreen) {
@@ -784,12 +827,15 @@ function PopupView() {
 		recognitionHistory.unshift(song);
 		var history_html = Mustache.render(_list_template_str, {"history": recognitionHistory});
         $('#history-on-result').html(history_html).ready(function(){
-			loadCoverImages();
-			var padding_for_buttons = 88;
-			var bottom_content_height = $("body").height() - $(".cover-content ").height();
-			var history_height = bottom_content_height - padding_for_buttons;
-			$(".bottom-content").css("height", bottom_content_height);
-			$("#history-results").css("height", history_height);
+            loadCoverImages();
+            var padding_for_buttons = 88;
+            var patreon_height = 0; // Height of Patreon banner + margins
+            if(_info.api_token) patreon_height = 0;
+            var bottom_content_height = $("body").height() - $(".cover-content").height();
+            var history_height = bottom_content_height - padding_for_buttons - patreon_height;
+            $(".bottom-content").css("height", bottom_content_height);
+            $("#history-results").css("height", history_height);
+            
 			
 			$("[share-url]").on("click", function() {
 				chrome.windows.create({url: $(this).attr("share-url")});
@@ -805,6 +851,17 @@ function PopupView() {
 				var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
 				$(".sub_menu").css("left", share_left);
 			}, 1000);
+            $('#patreon-link').on('click', function() {
+                chrome.tabs.create({url: 'https://www.patreon.com/audd'});
+            });
+            
+            $('#patreon-close').on('click', function() {
+                $('.patreon-suggestion').fadeOut();
+            });
+            
+            if(_info.api_token) {
+                $('.patreon-suggestion').hide();
+            }
 		});
         if(song.lyrics) {
             $("#lyrics_body").html(song.lyrics.lyrics.replace(/(?:\r\n|\r|\n)/g, '<br>').replace(/(\])/g, ']<br>'));
@@ -837,6 +894,7 @@ function PopupView() {
     var refresh = function(data) {
         if (typeof data !== "undefined") {
             $("#history_screen_info").html("");
+            hide_confirm_buttons();
 
             data.forEach(function(item) {
 				item.SquereCover = true;
@@ -924,6 +982,7 @@ function PopupView() {
         reset: reset,
         show_new_result: show_new_result,
         show_no_result: show_no_result,
-        clear_history: clear_history
+        clear_history: clear_history,
+        hide_confirm_buttons: hide_confirm_buttons
     };
 }
