@@ -259,7 +259,11 @@ function audioRecorderFirefox() {
 								return; // Gracefully handle expected rejections.
 							}
 							console.error("Recording failed:", e);
-							chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "An unexpected error occurred during recording."}});
+							if (e.message.includes('isolation properties')) {
+								chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "Recording failed: Security features of this website isolate audio from extensions."}});
+								return;
+							}
+							chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "An unexpected error occurred during recording: " + e}});
 						});
 						break;
 					case 'to_firefox_stop':
