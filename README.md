@@ -26,6 +26,13 @@ Watch the video below to see how it works:
 
 [![Demo](https://img.youtube.com/vi/xcASh3kdKp0/maxresdefault.jpg)](https://www.youtube.com/watch?v=xcASh3kdKp0)
 
+### CORS and headless media handling
+
+This version detects cross‑origin media in advance and, when necessary,
+creates a hidden clone so the recording can proceed without muting the
+original element. Media elements created off‑screen via `new Audio()` are
+also hooked and appended to the DOM, ensuring they are captured correctly.
+
 
 ## Current issues
 
