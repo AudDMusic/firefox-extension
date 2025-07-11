@@ -30,3 +30,10 @@ Watch the video below to see how it works:
 ## Current issues
 
 See the [issues](https://github.com/AudDMusic/firefox-extension/issues).
+
+## Troubleshooting
+
+If clicking the extension icon does not start recording, the content script may
+have failed to load in the active tab. The extension now attempts to inject the
+recorder script every time you start a new recognition session, and any errors
+will be shown in the popup. Reload the page and try again if problems persist.
