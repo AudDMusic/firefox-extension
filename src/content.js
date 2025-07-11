@@ -1,5 +1,24 @@
 // injected in Firefox
 
+// --- Headless media element hook ---
+(function() {
+    const script = document.createElement('script');
+    script.textContent = '(' + function() {
+        const origPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function(...args) {
+            if (!this.isConnected) {
+                this.style.display = 'none';
+                (document.documentElement || document.body).appendChild(this);
+            }
+            return origPlay.apply(this, args);
+        };
+    } + ')();';
+    document.documentElement.appendChild(script);
+    script.remove();
+})();
+
+const offscreenClones = new Map();
+
 function audioRecorderFirefox() {
 	var AudDRecorder = function(){
 		/**
@@ -75,23 +94,97 @@ function audioRecorderFirefox() {
 				/**
 				 * @description Stops the recording process.
 				 */
-				stop() {
+                                stop() {
                     // IMPORTANT: This function ONLY stops the MediaRecorder.
                     // It DOES NOT close the AudioContexts created in `start()`. Closing them
                     // would sever the audio routing and mute the element. The contexts are
                     // intended to persist as long as the element is on the page.
-					if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
-						REC.audio_recorder.stop();
+                                        if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
+                                                REC.audio_recorder.stop();
                     }
+                                        for (const [orig, clone] of offscreenClones.entries()) {
+                                                clone.pause();
+                                                clone.remove();
+                                                chrome.runtime.sendMessage({
+                                                        cmd: 'revoke_offscreen_element',
+                                                        src: orig.currentSrc
+                                                });
+                                        }
+                                        offscreenClones.clear();
                     isRecording = false;
-				},
+                                },
+
+                                /**
+                                 * Determine if the element's source requires CORS.
+                                 * @param {HTMLMediaElement} elem - Element to check.
+                                 * @returns {Promise<boolean>} True if CORS source.
+                                 */
+                                async isCorsSource(elem) {
+                                        try {
+                                                const src = elem.currentSrc || elem.src;
+                                                if (!src) return false;
+                                                const elemOrigin = new URL(src, document.baseURI).origin;
+                                                if (elemOrigin !== document.location.origin) {
+                                                        return true;
+                                                }
+                                                const resp = await chrome.runtime.sendMessage({
+                                                        cmd: 'check_cors_redirect',
+                                                        src
+                                                });
+                                                return resp && resp.crossOrigin;
+                                        } catch (e) {
+                                                return false;
+                                        }
+                                },
+
+                                /**
+                                 * Create a quiet offscreen clone for CORS sources.
+                                 * @param {HTMLMediaElement} elem - Original element.
+                                 * @returns {Promise<HTMLMediaElement>} Clone element.
+                                 */
+                                async createOffscreenClone(elem) {
+                                        if (offscreenClones.has(elem)) {
+                                                return offscreenClones.get(elem);
+                                        }
+                                        const resp = await chrome.runtime.sendMessage({
+                                                cmd: 'create_offscreen_element',
+                                                src: elem.currentSrc
+                                        });
+                                        const clone = new Audio();
+                                        clone.src = (resp && resp.blobUrl) ? resp.blobUrl : elem.currentSrc;
+                                        clone.crossOrigin = 'anonymous';
+                                        clone.volume = 0.02;
+                                        clone.preload = 'auto';
+                                        clone.currentTime = elem.currentTime;
+                                        clone.style.display = 'none';
+                                        (document.documentElement || document.body).appendChild(clone);
+                                        clone.addEventListener('canplay', () => clone.play().catch(() => {}), { once: true });
+
+                                        const cleanup = () => {
+                                                clone.pause();
+                                                clone.remove();
+                                                offscreenClones.delete(elem);
+                                                if (resp && resp.blobUrl) {
+                                                        chrome.runtime.sendMessage({
+                                                                cmd: 'revoke_offscreen_element',
+                                                                src: elem.currentSrc
+                                                        });
+                                                }
+                                        };
+                                        elem.addEventListener('pause', cleanup, { once: true });
+                                        elem.addEventListener('ended', cleanup, { once: true });
+                                        window.addEventListener('pagehide', cleanup, { once: true });
+
+                                        offscreenClones.set(elem, clone);
+                                        return clone;
+                                },
 
 				/**
-				 * @description Handles CORS errors by reloading the media element.
-				 * This is a disruptive but necessary operation for media served from a
-				 * different origin without the proper CORS headers.
-				 * @param {HTMLMediaElement} m_elm - The media element to reload.
-				 */
+                                * @description Handles CORS errors by reloading the media element.
+                                 * This is a disruptive but necessary operation for media served from a
+                                 * different origin without the proper CORS headers.
+                                 * @param {HTMLMediaElement} m_elm - The media element to reload.
+                                 */
 				async _reloadMediaForCors(m_elm) {
 					console.warn("CORS error on element. Attempting reload with crossOrigin attribute. This may cause a brief stutter.", m_elm);
 					
@@ -146,54 +239,58 @@ function audioRecorderFirefox() {
 						let hasAudioTracks = false;
 			  
 						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                for (const m_elm of mediaElements) {
+                                                        try {
+                                let elemForRecording = m_elm;
+                                if (await REC.isCorsSource(m_elm)) {
+                                    elemForRecording = await REC.createOffscreenClone(m_elm);
+                                }
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.
-                                if (!m_elm._auddPassthroughActive) {
-                                    console.log("Setting up audio passthrough for element:", m_elm);
+                                if (!elemForRecording._auddPassthroughActive) {
+                                    console.log("Setting up audio passthrough for element:", elemForRecording);
                                     const passthroughCtx = new AudioContext();
                                     let source;
                                     try {
                                         // Attempt to create a source. This is where CORS errors occur.
-                                        source = passthroughCtx.createMediaElementSource(m_elm);
+                                        source = passthroughCtx.createMediaElementSource(elemForRecording);
                                     } catch(err) {
                                         // If it's a security error, try the CORS reload workaround.
                                         if (err.name === 'SecurityError') {
-                                            await REC._reloadMediaForCors(m_elm);
-                                            source = passthroughCtx.createMediaElementSource(m_elm);
-                                        } else { throw err; } // Re-throw other, unrecoverable errors.
+                                            await REC._reloadMediaForCors(elemForRecording);
+                                            source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                        } else { throw err; }
                                     }
                                     // This line is the key: it routes the audio to the speakers.
                                     source.connect(passthroughCtx.destination);
                                     // Mark the element as processed so we don't do this again.
-                                    m_elm._auddPassthroughActive = true;
+                                    elemForRecording._auddPassthroughActive = true;
                                 }
 
 								// --- GET THE STREAM FOR THE RECORDER ---
-								let streamForRecording;
-								if (m_elm.captureStream) {
-									streamForRecording = m_elm.captureStream(); // Modern standard
-								} else if (m_elm.mozCaptureStream) {
-									streamForRecording = m_elm.mozCaptureStream(); // Firefox-specific
-								} else {
+                                                                let streamForRecording;
+                                                                if (elemForRecording.captureStream) {
+                                                                        streamForRecording = elemForRecording.captureStream(); // Modern standard
+                                                                } else if (elemForRecording.mozCaptureStream) {
+                                                                        streamForRecording = elemForRecording.mozCaptureStream(); // Firefox-specific
+                                                                } else {
                                     // Last resort fallback: create a new context just for streaming.
                                     const fallbackCtx = new AudioContext();
-									const fallbackSource = fallbackCtx.createMediaElementSource(m_elm);
+                                                                        const fallbackSource = fallbackCtx.createMediaElementSource(elemForRecording);
                                     const destination = fallbackCtx.createMediaStreamDestination();
                                     fallbackSource.connect(destination);
-									streamForRecording = destination.stream;
-								}
+                                                                        streamForRecording = destination.stream;
+                                                                }
 				
 								// Add any found audio tracks to our main combined stream.
 								if (streamForRecording && streamForRecording.getAudioTracks().length > 0) {
 									streamForRecording.getAudioTracks().forEach(track => combinedStream.addTrack(track));
 									hasAudioTracks = true;
 								}
-							} catch(err) {
-								console.error("Failed to process audio for element, skipping:", m_elm, err);
-							}
+                                                        } catch(err) {
+                                                                console.error("Failed to process audio for element, skipping:", elemForRecording, err);
+                                                        }
 						}
 			  
 						// If, after checking all elements, we have no audio, abort.

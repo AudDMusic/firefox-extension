@@ -15,6 +15,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
 var extensionConfig = {};
 var storageCache = {};
+var corsElements = {};
 function StorageHelper() {
 
     var _is_sync = false;
@@ -393,8 +394,42 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.clear_history();
             }
             break;
+        case "create_offscreen_element": {
+            const existing = corsElements[request.src];
+            if (existing) {
+                sendResponse({ blobUrl: existing });
+                return true;
+            }
+            fetch(request.src)
+                .then(resp => resp.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    corsElements[request.src] = url;
+                    sendResponse({ blobUrl: url });
+                })
+                .catch(() => sendResponse({ blobUrl: null }));
+            return true;
+        }
+        case "revoke_offscreen_element": {
+            const url = corsElements[request.src];
+            if (url) {
+                URL.revokeObjectURL(url);
+                delete corsElements[request.src];
+            }
+            break;
+        }
+        case "check_cors_redirect": {
+            fetch(request.src, { method: 'HEAD', redirect: 'follow' })
+                .then(resp => {
+                    const original = new URL(request.src).origin;
+                    const finalOrigin = new URL(resp.url).origin;
+                    sendResponse({ crossOrigin: finalOrigin !== original });
+                })
+                .catch(() => sendResponse({ crossOrigin: false }));
+            return true;
+        }
         case "popup_error_relay":
-			request.cmd = "popup_error";
+                        request.cmd = "popup_error";
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":
