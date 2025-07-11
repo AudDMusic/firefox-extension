@@ -34,6 +34,12 @@
     "https://www.googleapis.com/",
     "<all_urls>"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/headless-hook.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "oauth2": {
 	"client_id": "875741845768-1jga752cov9r774giitn0hbeom6hkh19.apps.googleusercontent.com",
     "scopes":["https://www.googleapis.com/auth/chromewebstore.readonly", "https://www.googleapis.com/auth/userinfo.profile"]
