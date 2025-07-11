@@ -393,8 +393,18 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.clear_history();
             }
             break;
+        case "check_cors_redirect": {
+            fetch(request.src, { method: 'HEAD', redirect: 'follow' })
+                .then(resp => {
+                    const original = new URL(request.src).origin;
+                    const finalOrigin = new URL(resp.url).origin;
+                    sendResponse({ crossOrigin: finalOrigin !== original });
+                })
+                .catch(() => sendResponse({ crossOrigin: false }));
+            return true;
+        }
         case "popup_error_relay":
-			request.cmd = "popup_error";
+                        request.cmd = "popup_error";
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":

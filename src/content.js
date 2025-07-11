@@ -1,5 +1,22 @@
 // injected in Firefox
 
+// --- Headless media element hook ---
+(function() {
+    const script = document.createElement('script');
+    script.textContent = '(' + function() {
+        const origPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function(...args) {
+            if (!this.isConnected) {
+                this.style.display = 'none';
+                (document.documentElement || document.body).appendChild(this);
+            }
+            return origPlay.apply(this, args);
+        };
+    } + ')();';
+    document.documentElement.appendChild(script);
+    script.remove();
+})();
+
 function audioRecorderFirefox() {
 	var AudDRecorder = function(){
 		/**
@@ -75,23 +92,89 @@ function audioRecorderFirefox() {
 				/**
 				 * @description Stops the recording process.
 				 */
-				stop() {
+                                stop() {
                     // IMPORTANT: This function ONLY stops the MediaRecorder.
                     // It DOES NOT close the AudioContexts created in `start()`. Closing them
                     // would sever the audio routing and mute the element. The contexts are
                     // intended to persist as long as the element is on the page.
-					if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
-						REC.audio_recorder.stop();
+                                        if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
+                                                REC.audio_recorder.stop();
                     }
                     isRecording = false;
-				},
+                                },
+
+                                /**
+                                 * Determine if the element's source requires CORS.
+                                 * @param {HTMLMediaElement} elem - Element to check.
+                                 * @returns {Promise<boolean>} True if CORS source.
+                                 */
+                                async isCorsSource(elem) {
+                                        if (elem._auddCors !== undefined) return elem._auddCors;
+                                        try {
+                                                const src = elem.currentSrc || elem.src;
+                                                if (!src) return false;
+                                                const elemOrigin = new URL(src, document.baseURI).origin;
+                                                if (elemOrigin !== document.location.origin) {
+                                                        elem._auddCors = true;
+                                                        return true;
+                                                }
+                                                const resp = await chrome.runtime.sendMessage({
+                                                        cmd: 'check_cors_redirect',
+                                                        src
+                                                });
+                                                elem._auddCors = resp && resp.crossOrigin;
+                                                return elem._auddCors;
+                                        } catch (e) {
+                                                elem._auddCors = false;
+                                                return false;
+                                        }
+                                },
+
+                                /**
+                                 * Create or return a hidden clone of the media element with CORS enabled.
+                                 * @param {HTMLMediaElement} elem - Original element.
+                                 * @returns {HTMLMediaElement} Offscreen element.
+                                 */
+                                getOffscreenClone(elem) {
+                                        if (elem._auddOffscreen) return elem._auddOffscreen.clone;
+
+                                        const clone = document.createElement(elem.tagName.toLowerCase());
+                                        clone.src = elem.currentSrc || elem.src;
+                                        clone.crossOrigin = 'anonymous';
+                                        clone.preload = 'auto';
+                                        clone.volume = 0;
+                                        clone.muted = true;
+                                        clone.currentTime = elem.currentTime;
+                                        clone.style.display = 'none';
+                                        (document.documentElement || document.body).appendChild(clone);
+
+                                        const syncPlay = () => {
+                                                clone.currentTime = elem.currentTime;
+                                                clone.play().catch(() => {});
+                                        };
+                                        const syncPause = () => clone.pause();
+                                        const syncSeek = () => { clone.currentTime = elem.currentTime; };
+
+                                        elem.addEventListener('play', syncPlay);
+                                        elem.addEventListener('pause', syncPause);
+                                        elem.addEventListener('seeking', syncSeek);
+
+                                        const cleanup = () => {
+                                                clone.pause();
+                                                clone.remove();
+                                        };
+                                        window.addEventListener('pagehide', cleanup, { once: true });
+
+                                        elem._auddOffscreen = { clone, handlers: { syncPlay, syncPause, syncSeek, cleanup } };
+                                        return clone;
+                                },
 
 				/**
-				 * @description Handles CORS errors by reloading the media element.
-				 * This is a disruptive but necessary operation for media served from a
-				 * different origin without the proper CORS headers.
-				 * @param {HTMLMediaElement} m_elm - The media element to reload.
-				 */
+                                * @description Handles CORS errors by reloading the media element.
+                                 * This is a disruptive but necessary operation for media served from a
+                                 * different origin without the proper CORS headers.
+                                 * @param {HTMLMediaElement} m_elm - The media element to reload.
+                                 */
 				async _reloadMediaForCors(m_elm) {
 					console.warn("CORS error on element. Attempting reload with crossOrigin attribute. This may cause a brief stutter.", m_elm);
 					
@@ -146,54 +229,58 @@ function audioRecorderFirefox() {
 						let hasAudioTracks = false;
 			  
 						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                for (const m_elm of mediaElements) {
+                                                        try {
+                                let elemToUse = m_elm;
+                                if (await REC.isCorsSource(m_elm)) {
+                                    elemToUse = REC.getOffscreenClone(m_elm);
+                                }
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.
-                                if (!m_elm._auddPassthroughActive) {
-                                    console.log("Setting up audio passthrough for element:", m_elm);
+                                if (!elemToUse._auddPassthroughActive) {
+                                    console.log("Setting up audio passthrough for element:", elemToUse);
                                     const passthroughCtx = new AudioContext();
                                     let source;
                                     try {
                                         // Attempt to create a source. This is where CORS errors occur.
-                                        source = passthroughCtx.createMediaElementSource(m_elm);
+                                        source = passthroughCtx.createMediaElementSource(elemToUse);
                                     } catch(err) {
                                         // If it's a security error, try the CORS reload workaround.
                                         if (err.name === 'SecurityError') {
-                                            await REC._reloadMediaForCors(m_elm);
-                                            source = passthroughCtx.createMediaElementSource(m_elm);
+                                            await REC._reloadMediaForCors(elemToUse);
+                                            source = passthroughCtx.createMediaElementSource(elemToUse);
                                         } else { throw err; } // Re-throw other, unrecoverable errors.
                                     }
                                     // This line is the key: it routes the audio to the speakers.
                                     source.connect(passthroughCtx.destination);
                                     // Mark the element as processed so we don't do this again.
-                                    m_elm._auddPassthroughActive = true;
+                                    elemToUse._auddPassthroughActive = true;
                                 }
 
 								// --- GET THE STREAM FOR THE RECORDER ---
 								let streamForRecording;
-								if (m_elm.captureStream) {
-									streamForRecording = m_elm.captureStream(); // Modern standard
-								} else if (m_elm.mozCaptureStream) {
-									streamForRecording = m_elm.mozCaptureStream(); // Firefox-specific
-								} else {
+                                                                if (elemToUse.captureStream) {
+                                                                        streamForRecording = elemToUse.captureStream(); // Modern standard
+                                                                } else if (elemToUse.mozCaptureStream) {
+                                                                        streamForRecording = elemToUse.mozCaptureStream(); // Firefox-specific
+                                                                } else {
                                     // Last resort fallback: create a new context just for streaming.
                                     const fallbackCtx = new AudioContext();
-									const fallbackSource = fallbackCtx.createMediaElementSource(m_elm);
+                                                                        const fallbackSource = fallbackCtx.createMediaElementSource(elemToUse);
                                     const destination = fallbackCtx.createMediaStreamDestination();
                                     fallbackSource.connect(destination);
-									streamForRecording = destination.stream;
-								}
+                                                                        streamForRecording = destination.stream;
+                                                                }
 				
 								// Add any found audio tracks to our main combined stream.
 								if (streamForRecording && streamForRecording.getAudioTracks().length > 0) {
 									streamForRecording.getAudioTracks().forEach(track => combinedStream.addTrack(track));
 									hasAudioTracks = true;
 								}
-							} catch(err) {
-								console.error("Failed to process audio for element, skipping:", m_elm, err);
-							}
+                                                        } catch(err) {
+                                                                console.error("Failed to process audio for element, skipping:", elemToUse, err);
+                                                        }
 						}
 			  
 						// If, after checking all elements, we have no audio, abort.
