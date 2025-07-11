@@ -1,6 +1,22 @@
 // injected in Firefox
 
 function audioRecorderFirefox() {
+    // Hook HTMLMediaElement.play in the page context to track headless elements
+    const hookScript = document.createElement('script');
+    hookScript.textContent = '(' + function() {
+        const origPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function(...args) {
+            // Append to DOM if not already connected so querySelector can find it
+            if (!this.isConnected) {
+                document.documentElement.appendChild(this);
+            }
+            return origPlay.apply(this, args);
+        };
+    } + ')();';
+    document.documentElement.appendChild(hookScript);
+    hookScript.remove();
+
+    var AudDRecorder = function(){
 	var AudDRecorder = function(){
 		/**
 		 * REC is a self-contained module for capturing audio from media elements on a page.
@@ -92,8 +108,8 @@ function audioRecorderFirefox() {
 				 * different origin without the proper CORS headers.
 				 * @param {HTMLMediaElement} m_elm - The media element to reload.
 				 */
-				async _reloadMediaForCors(m_elm) {
-					console.warn("CORS error on element. Attempting reload with crossOrigin attribute. This may cause a brief stutter.", m_elm);
+                                async _reloadMediaForCors(m_elm) {
+                                        console.warn("CORS error on element. Attempting reload with crossOrigin attribute. This may cause a brief stutter.", m_elm);
 					
 					// Preserve the element's state to restore it after reload.
 					const wasPlaying = !m_elm.paused;
@@ -113,9 +129,28 @@ function audioRecorderFirefox() {
 
 					// Restore the previous playback state.
 					m_elm.currentTime = currentTime;
-					if (wasPlaying) await m_elm.play();
-					console.log("Media reloaded successfully.");
-				},
+                                        if (wasPlaying) await m_elm.play();
+                                        console.log("Media reloaded successfully.");
+                                },
+
+                                /**
+                                 * Checks if the given media element loads its source with CORS restrictions.
+                                 * @param {HTMLMediaElement} m_elm
+                                 * @returns {Promise<boolean>} true if it is a CORS source
+                                 */
+                                async _isCorsSource(m_elm) {
+                                        try {
+                                                const src = m_elm.currentSrc;
+                                                if (!src) return false;
+                                                const srcOrigin = (new URL(src, location.href)).origin;
+                                                if (srcOrigin !== location.origin) return true;
+                                                const resp = await fetch(src, { method: 'HEAD', redirect: 'follow' });
+                                                return resp.type !== 'basic';
+                                        } catch(e) {
+                                                console.warn('CORS check failed', e);
+                                                return false;
+                                        }
+                                },
 
 				/**
 				 * @description The main function to start the recording process.
@@ -135,11 +170,27 @@ function audioRecorderFirefox() {
 					REC.audio_data = [];
 				  
 					try {
-						const mediaElements = REC.get_media_elements();
-						if (mediaElements.length === 0) {
-							isRecording = false;
-							return Promise.reject('no_media');
-						}
+                                                let mediaElements = REC.get_media_elements();
+                                                if (mediaElements.length === 0) {
+                                                        isRecording = false;
+                                                        return Promise.reject('no_media');
+                                                }
+
+                                                // Check for CORS sources ahead of time
+                                                const filtered = [];
+                                                for (const elm of mediaElements) {
+                                                        if (await REC._isCorsSource(elm)) {
+                                                                chrome.runtime.sendMessage({
+                                                                        cmd: 'background_capture_cors',
+                                                                        src: elm.currentSrc,
+                                                                        time: elm.currentTime,
+                                                                        rec_time_ms
+                                                                });
+                                                        } else {
+                                                                filtered.push(elm);
+                                                        }
+                                                }
+                                                mediaElements = filtered;
 
 						// This stream will collect audio tracks from all sources.
 						const combinedStream = new MediaStream();

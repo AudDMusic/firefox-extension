@@ -15,6 +15,30 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
 var extensionConfig = {};
 var storageCache = {};
+
+async function captureCorsElement(src, time, recLen) {
+    try {
+        const audio = document.createElement('audio');
+        audio.crossOrigin = 'anonymous';
+        audio.src = src;
+        if (time) audio.currentTime = time;
+        await audio.play();
+        const stream = audio.captureStream ? audio.captureStream() : (audio.mozCaptureStream ? audio.mozCaptureStream() : null);
+        if (!stream) throw new Error('captureStream not supported');
+        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm', audioBitsPerSecond: 128000 });
+        const chunks = [];
+        recorder.ondataavailable = e => e.data && chunks.push(e.data);
+        const stopped = new Promise(r => recorder.onstop = r);
+        recorder.start();
+        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, recLen);
+        await stopped;
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        chrome.runtime.sendMessage({ cmd: 'firefox_ondataavailable', result: { status: 0, data: blob } });
+    } catch (err) {
+        console.error('CORS capture failed', err);
+        chrome.runtime.sendMessage({ cmd: 'popup_error', result: { status: -1, text: 'CORS capture failed: ' + err } });
+    }
+}
 function StorageHelper() {
 
     var _is_sync = false;
@@ -235,7 +259,7 @@ let totalFrames = 0;
 
 
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
-	console.log(request);
+        console.log(request);
     switch (request.cmd) {
 		/*case "query-active-tab":
             chrome.tabs.query({active: true}, (tabs) => {
@@ -375,10 +399,13 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.init();
             }
             break;
+        case "background_capture_cors":
+            captureCorsElement(request.src, request.time, request.rec_time_ms);
+            break;
         case "change_settings":
             if (g_recognizer_client) {
                 g_recognizer_client._storage_helper.set_settings(request.api_token, request.record_length);
-				chrome.runtime.sendMessage({cmd: "popup_message", result: {"msg": "settingsSaved"}});
+                                chrome.runtime.sendMessage({cmd: "popup_message", result: {"msg": "settingsSaved"}});
             }
             break;
         case "get_token":
