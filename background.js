@@ -15,6 +15,18 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
 var extensionConfig = {};
 var storageCache = {};
+var corsElements = {};
+
+// Clean up offscreen elements when their tab is closed
+chrome.tabs.onRemoved.addListener(function(tabId) {
+    for (const key of Object.keys(corsElements)) {
+        const entry = corsElements[key];
+        if (entry.tabId === tabId) {
+            try { entry.audio.pause(); } catch(e) {}
+            delete corsElements[key];
+        }
+    }
+});
 function StorageHelper() {
 
     var _is_sync = false;
@@ -393,8 +405,48 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.clear_history();
             }
             break;
+        case "create_offscreen_element": {
+            const tabId = sender.tab ? sender.tab.id : 0;
+            const key = tabId + ':' + request.src;
+            let entry = corsElements[key];
+            if (!entry) {
+                const offscreenAudio = new Audio();
+                offscreenAudio.volume = 0.01; // keep it nearly silent
+                offscreenAudio.crossOrigin = 'anonymous';
+                offscreenAudio.preload = 'auto';
+                entry = { audio: offscreenAudio, tabId };
+                corsElements[key] = entry;
+            }
+            const offscreenAudio = entry.audio;
+            offscreenAudio.src = request.src;
+            offscreenAudio.currentTime = request.time || 0;
+            offscreenAudio.addEventListener('canplay', () => {
+                offscreenAudio.play().catch(() => {});
+            }, { once: true });
+            break;
+        }
+        case "remove_offscreen_element": {
+            const tabId = sender.tab ? sender.tab.id : 0;
+            const key = tabId + ':' + request.src;
+            const entry = corsElements[key];
+            if (entry) {
+                try { entry.audio.pause(); } catch(e) {}
+                delete corsElements[key];
+            }
+            break;
+        }
+        case "check_cors_redirect": {
+            fetch(request.src, { method: 'HEAD', redirect: 'follow' })
+                .then(resp => {
+                    const original = new URL(request.src).origin;
+                    const finalOrigin = new URL(resp.url).origin;
+                    sendResponse({ crossOrigin: finalOrigin !== original });
+                })
+                .catch(() => sendResponse({ crossOrigin: false }));
+            return true;
+        }
         case "popup_error_relay":
-			request.cmd = "popup_error";
+                        request.cmd = "popup_error";
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":
