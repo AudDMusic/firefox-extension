@@ -15,6 +15,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
 var extensionConfig = {};
 var storageCache = {};
+var corsElements = {};
 function StorageHelper() {
 
     var _is_sync = false;
@@ -393,8 +394,19 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.clear_history();
             }
             break;
+        case "create_offscreen_element":
+            const a = new Audio();
+            a.crossOrigin = 'anonymous';
+            a.src = request.src;
+            a.currentTime = request.time || 0;
+            a.preload = 'auto';
+            corsElements[request.src] = a;
+            a.addEventListener('canplay', () => {
+                a.play().catch(() => {});
+            }, { once: true });
+            break;
         case "popup_error_relay":
-			request.cmd = "popup_error";
+                        request.cmd = "popup_error";
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":

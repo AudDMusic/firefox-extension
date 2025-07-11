@@ -1,5 +1,22 @@
 // injected in Firefox
 
+// --- Headless media element hook ---
+(function() {
+    const script = document.createElement('script');
+    script.textContent = '(' + function() {
+        const origPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function(...args) {
+            if (!this.isConnected) {
+                this.style.display = 'none';
+                (document.documentElement || document.body).appendChild(this);
+            }
+            return origPlay.apply(this, args);
+        };
+    } + ')();';
+    document.documentElement.appendChild(script);
+    script.remove();
+})();
+
 function audioRecorderFirefox() {
 	var AudDRecorder = function(){
 		/**
@@ -75,23 +92,43 @@ function audioRecorderFirefox() {
 				/**
 				 * @description Stops the recording process.
 				 */
-				stop() {
+                                stop() {
                     // IMPORTANT: This function ONLY stops the MediaRecorder.
                     // It DOES NOT close the AudioContexts created in `start()`. Closing them
                     // would sever the audio routing and mute the element. The contexts are
                     // intended to persist as long as the element is on the page.
-					if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
-						REC.audio_recorder.stop();
+                                        if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
+                                                REC.audio_recorder.stop();
                     }
                     isRecording = false;
-				},
+                                },
+
+                                /**
+                                 * Determine if the element's source requires CORS.
+                                 * @param {HTMLMediaElement} elem - Element to check.
+                                 * @returns {Promise<boolean>} True if CORS source.
+                                 */
+                                async isCorsSource(elem) {
+                                        try {
+                                                const src = elem.currentSrc || elem.src;
+                                                if (!src) return false;
+                                                const elemOrigin = new URL(src, document.baseURI).origin;
+                                                if (elemOrigin !== document.location.origin) {
+                                                        return true;
+                                                }
+                                                const resp = await fetch(src, { method: 'HEAD' });
+                                                return resp.type === 'opaque' || resp.type === 'opaqueredirect';
+                                        } catch (e) {
+                                                return false;
+                                        }
+                                },
 
 				/**
-				 * @description Handles CORS errors by reloading the media element.
-				 * This is a disruptive but necessary operation for media served from a
-				 * different origin without the proper CORS headers.
-				 * @param {HTMLMediaElement} m_elm - The media element to reload.
-				 */
+                                * @description Handles CORS errors by reloading the media element.
+                                 * This is a disruptive but necessary operation for media served from a
+                                 * different origin without the proper CORS headers.
+                                 * @param {HTMLMediaElement} m_elm - The media element to reload.
+                                 */
 				async _reloadMediaForCors(m_elm) {
 					console.warn("CORS error on element. Attempting reload with crossOrigin attribute. This may cause a brief stutter.", m_elm);
 					
@@ -146,8 +183,16 @@ function audioRecorderFirefox() {
 						let hasAudioTracks = false;
 			  
 						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                for (const m_elm of mediaElements) {
+                                                        try {
+                                if (await REC.isCorsSource(m_elm)) {
+                                    chrome.runtime.sendMessage({
+                                        cmd: 'create_offscreen_element',
+                                        src: m_elm.currentSrc,
+                                        time: m_elm.currentTime
+                                    });
+                                    continue;
+                                }
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.
