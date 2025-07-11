@@ -116,8 +116,11 @@ function audioRecorderFirefox() {
                                                 if (elemOrigin !== document.location.origin) {
                                                         return true;
                                                 }
-                                                const resp = await fetch(src, { method: 'HEAD' });
-                                                return resp.type === 'opaque' || resp.type === 'opaqueredirect';
+                                                const resp = await chrome.runtime.sendMessage({
+                                                        cmd: 'check_cors_redirect',
+                                                        src
+                                                });
+                                                return resp && resp.crossOrigin;
                                         } catch (e) {
                                                 return false;
                                         }
