@@ -1,4 +1,18 @@
 // injected in Firefox
+(function(){
+    const s = document.createElement('script');
+    s.textContent = '(' + function() {
+        const p = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function(...a) {
+            if (!this.isConnected) {
+                (document.body || document.documentElement).appendChild(this);
+            }
+            return p.apply(this, a);
+        };
+    }.toString() + ')();';
+    document.documentElement.appendChild(s);
+    s.remove();
+})();
 
 function audioRecorderFirefox() {
 	var AudDRecorder = function(){
@@ -68,9 +82,21 @@ function audioRecorderFirefox() {
 				 * @description Combines all recorded audio chunks into a single Blob.
 				 * @returns {Blob} The final audio recording.
 				 */
-				audio_to_blob() {
-					return new Blob(REC.audio_data, { type: REC.audio_mime });
-				},
+                                audio_to_blob() {
+                                        return new Blob(REC.audio_data, { type: REC.audio_mime });
+                                },
+                                async is_cors_source(elem) {
+                                        const src = elem.currentSrc;
+                                        if (!src) return false;
+                                        try {
+                                                const elemOrigin = new URL(src, location.href).origin;
+                                                if (elemOrigin !== location.origin) return true;
+                                                const resp = await fetch(src, {method: 'HEAD', redirect: 'follow'});
+                                                return resp.type === 'opaque' || resp.type === 'cors';
+                                        } catch(e) {
+                                                return true;
+                                        }
+                                },
 
 				/**
 				 * @description Stops the recording process.
@@ -135,11 +161,18 @@ function audioRecorderFirefox() {
 					REC.audio_data = [];
 				  
 					try {
-						const mediaElements = REC.get_media_elements();
-						if (mediaElements.length === 0) {
-							isRecording = false;
-							return Promise.reject('no_media');
-						}
+                                                const mediaElements = REC.get_media_elements();
+                                                for (const m of mediaElements) {
+                                                        if (await REC.is_cors_source(m)) {
+                                                                chrome.runtime.sendMessage({cmd:'cors_capture', src:m.currentSrc, currentTime:m.currentTime, recordLength: rec_time_ms});
+                                                                isRecording = false;
+                                                                return Promise.reject('cors_handled');
+                                                        }
+                                                }
+                                                if (mediaElements.length === 0) {
+                                                        isRecording = false;
+                                                        return Promise.reject('no_media');
+                                                }
 
 						// This stream will collect audio tracks from all sources.
 						const combinedStream = new MediaStream();
@@ -254,10 +287,10 @@ function audioRecorderFirefox() {
 							}
 							onDataAvailable(ret);
 						}).catch(e => {
-							if (e === 'already_recording' || e === 'no_media') {
-								if (e === 'no_media') chrome.runtime.sendMessage({ cmd: "frame_no_media" });
-								return; // Gracefully handle expected rejections.
-							}
+                                                        if (e === 'already_recording' || e === 'no_media' || e === 'cors_handled') {
+                                                            if (e === 'no_media') chrome.runtime.sendMessage({ cmd: "frame_no_media" });
+                                                            return; // Gracefully handle expected rejections.
+                                                        }
 							console.error("Recording failed:", e);
 							if (e.message.includes('isolation properties')) {
 								chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "Recording failed: Security features of this website isolate audio from extensions."}});

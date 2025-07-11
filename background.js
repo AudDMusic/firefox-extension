@@ -15,6 +15,16 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
 var extensionConfig = {};
 var storageCache = {};
+let offscreenReady = null;
+async function ensureOffscreen() {
+    if (offscreenReady) return offscreenReady;
+    offscreenReady = chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['AUDIO_PLAYBACK'],
+        justification: 'capture cross origin media'
+    });
+    return offscreenReady;
+}
 function StorageHelper() {
 
     var _is_sync = false;
@@ -398,8 +408,18 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":
-			request.cmd = "popup_message";
+                        request.cmd = "popup_message";
             chrome.runtime.sendMessage(request);
+            break;
+        case "cors_capture":
+            ensureOffscreen().then(() => {
+                chrome.runtime.sendMessage({
+                    cmd: 'offscreen_record',
+                    src: request.src,
+                    currentTime: request.currentTime,
+                    recordLength: request.recordLength
+                });
+            });
             break;
     }
 
