@@ -3,12 +3,16 @@ var _is_recognizing = false;
 var _info = {};
 var _is_starting = false;
 
-function audio_start(record_length) {
-	if (_is_recognizing) {
-		return;
-	}
-	_is_recognizing = true;
-	_audio_recorder.start(record_length);
+function audio_start(record_length, onStarted) {
+        if (_is_recognizing) {
+                return;
+        }
+        _audio_recorder.start(record_length, function(success) {
+                _is_recognizing = success;
+                if(success && typeof onStarted === 'function') {
+                        onStarted();
+                }
+        });
 }
 function _audio_stop() {
 	if (!_is_recognizing) {
@@ -113,9 +117,7 @@ function RecognizerController(popup_view) {
         
         _is_starting = true;
         cancel();
-        
-        _popup_view.start();
-        
+
         chrome.windows.getCurrent(w => {
             chrome.tabs.query({active: true, windowId: w.id}, tabs => {
                 console.log(tabs);
@@ -158,10 +160,11 @@ function RecognizerController(popup_view) {
 					if (!local_lan) {
 						local_lan = navigator.language;
 					}
-					_info.local_lan = local_lan;
-					audio_start(request.record_length);
-					_popup_view.start();
-					break;
+                                        _info.local_lan = local_lan;
+                                        audio_start(request.record_length, function(){
+                                                _popup_view.start();
+                                        });
+                                        break;
 				case "firefox_ondataavailable":
 					_audio_recorder.OnDataAvailable(request.result);
 					return;
@@ -532,34 +535,38 @@ function AudioRecorder() {
 		}
 		OnRecordedAudio(audio_buffer_obj['data']);
 	};
-    var start = function(record_time_ms) {
+    var start = function(record_time_ms, callback) {
         if (_is_recording) {
             console.log("_is_recording=" + _is_recording);
+            if (callback) callback(false);
             return;
         }
-		if(_is_firefox) {
-			chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_start", data: record_time_ms});
-			return;
-		}
+                if(_is_firefox) {
+                        chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_start", data: record_time_ms});
+                        if (callback) callback(true);
+                        return;
+                }
 		
         _is_recording = true;
         chrome.tabCapture.capture({
             audio : true,
             video : false
         }, function(audio_stream) {
-			if (chrome.runtime.lastError) {
-				_is_recording = false;
+                        if (chrome.runtime.lastError) {
+                                _is_recording = false;
 				if(chrome.runtime.lastError.message == "Extension has not been invoked for the current page (see activeTab permission). Chrome pages cannot be captured.") {
 					chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "msg": "notInvoked"}});
 				} else {
 					chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": chrome.runtime.lastError.message}});
 				}
-				return;
-			}
-			if(record_time_ms == 0) {
-				console.log("Recording length isn't set");
-				return;
-			}
+                                if(callback) callback(false);
+                                return;
+                        }
+                        if(record_time_ms == 0) {
+                                console.log("Recording length isn't set");
+                                if(callback) callback(false);
+                                return;
+                        }
             var AudioContext = window.AudioContext || window.webkitAudioContext;
             var audioCtx = new AudioContext();
             var source = audioCtx.createMediaStreamSource(audio_stream);
@@ -568,9 +575,13 @@ function AudioRecorder() {
             _media_recorder_handler = new MediaRecorderWrapper(audio_stream);
 
             _media_recorder_handler.ondataavailable = OnDataAvailable;
-            if(!_media_recorder_handler.start(record_time_ms)) {
-				chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": "start error: can not record audio."}});
+            var started = _media_recorder_handler.start(record_time_ms);
+            if(!started) {
+                                chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": "start error: can not record audio."}});
+                                if(callback) callback(false);
+                                return;
             }
+            if(callback) callback(true);
         });
     };
 
