@@ -233,6 +233,32 @@ chrome.windows.onRemoved.addListener(function(windowId) {
 let noMediaFrames = 0;
 let totalFrames = 0;
 
+async function captureCorsMedia(url, time, length) {
+    return new Promise((resolve, reject) => {
+        try {
+            const audio = new Audio();
+            audio.crossOrigin = 'anonymous';
+            audio.src = url;
+            audio.preload = 'auto';
+            const cleanup = () => { audio.pause(); audio.src = ''; };
+            audio.addEventListener('canplay', () => {
+                try {
+                    if (time) audio.currentTime = time;
+                    const stream = audio.captureStream ? audio.captureStream() : audio.mozCaptureStream();
+                    const rec = new MediaRecorder(stream, {mimeType: 'audio/webm', audioBitsPerSecond: 128000});
+                    const chunks = [];
+                    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+                    rec.onstop = () => { cleanup(); resolve(new Blob(chunks, {type: 'audio/webm'})); };
+                    rec.start();
+                    audio.play().catch(()=>{});
+                    setTimeout(() => rec.stop(), length);
+                } catch(err){ cleanup(); reject(err); }
+            });
+            audio.onerror = () => { cleanup(); reject(new Error('audio load failed')); };
+        } catch(e){ reject(e); }
+    });
+}
+
 
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 	console.log(request);
@@ -393,8 +419,17 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.clear_history();
             }
             break;
+        case "prepare_offscreen_capture":
+            captureCorsMedia(request.src, request.time, storageCache.record_length || 2000)
+                .then(blob => {
+                    chrome.runtime.sendMessage({cmd: "firefox_ondataavailable", result: {status: 0, data: blob}});
+                })
+                .catch(err => {
+                    chrome.runtime.sendMessage({cmd: "popup_error", result: {status: -1, text: "Offscreen capture failed: " + err}});
+                });
+            break;
         case "popup_error_relay":
-			request.cmd = "popup_error";
+                        request.cmd = "popup_error";
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":

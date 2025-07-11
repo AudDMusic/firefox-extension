@@ -1,12 +1,28 @@
 // injected in Firefox
 
 function audioRecorderFirefox() {
-	var AudDRecorder = function(){
-		/**
-		 * REC is a self-contained module for capturing audio from media elements on a page.
-		 * It is designed to solve several key challenges:
-		 * 1. Muting: Prevents media elements from being muted during and after recording by
-		 *    creating a persistent AudioContext passthrough.
+        // Inject hook in the page's main world to expose headless media elements
+        (function(){
+            const s = document.createElement('script');
+            s.textContent = '(' + function() {
+                const origPlay = HTMLMediaElement.prototype.play;
+                HTMLMediaElement.prototype.play = function(...args) {
+                    if(!this.isConnected){
+                        try {(document.body||document.documentElement).appendChild(this);}catch(e){}
+                    }
+                    return origPlay.apply(this, args);
+                };
+            } + ')();';
+            document.documentElement.appendChild(s);
+            s.remove();
+        })();
+
+        var AudDRecorder = function(){
+                /**
+                 * REC is a self-contained module for capturing audio from media elements on a page.
+                 * It is designed to solve several key challenges:
+                 * 1. Muting: Prevents media elements from being muted during and after recording by
+                 *    creating a persistent AudioContext passthrough.
 		 * 2. Discovery: Finds all active <audio> and <video> elements, including those
 		 *    nested inside Shadow DOMs.
 		 * 3. CORS: Intelligently handles cross-origin security errors by reloading the
@@ -75,7 +91,7 @@ function audioRecorderFirefox() {
 				/**
 				 * @description Stops the recording process.
 				 */
-				stop() {
+                                stop() {
                     // IMPORTANT: This function ONLY stops the MediaRecorder.
                     // It DOES NOT close the AudioContexts created in `start()`. Closing them
                     // would sever the audio routing and mute the element. The contexts are
@@ -84,7 +100,28 @@ function audioRecorderFirefox() {
 						REC.audio_recorder.stop();
                     }
                     isRecording = false;
-				},
+                                },
+
+                                /**
+                                 * Determine if a media element is served with CORS restrictions.
+                                 * First check if the origin differs from the document origin.
+                                 * If origins match, perform a HEAD request and examine response.type.
+                                 * @param {HTMLMediaElement} elem
+                                 * @returns {Promise<boolean>} true when the source is CORS protected
+                                 */
+                                async isCorsSource(elem) {
+                                        try {
+                                                const url = new URL(elem.currentSrc, document.baseURI);
+                                                if (url.origin !== document.location.origin) {
+                                                        return true;
+                                                }
+                                                const resp = await fetch(elem.currentSrc, {method: 'HEAD'});
+                                                return resp.type === 'opaque';
+                                        } catch(e) {
+                                                console.warn('CORS detection failed', e);
+                                                return false;
+                                        }
+                                },
 
 				/**
 				 * @description Handles CORS errors by reloading the media element.
@@ -146,8 +183,15 @@ function audioRecorderFirefox() {
 						let hasAudioTracks = false;
 			  
 						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                for (const m_elm of mediaElements) {
+                                                        try {                        if (await REC.isCorsSource(m_elm)) {
+                                chrome.runtime.sendMessage({
+                                        cmd: 'prepare_offscreen_capture',
+                                        src: m_elm.currentSrc,
+                                        time: m_elm.currentTime
+                                });
+                                continue;
+                        }
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.
