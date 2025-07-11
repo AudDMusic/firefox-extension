@@ -155,6 +155,22 @@ function StorageHelper() {
     };
 }
 
+var offscreenCreated = false;
+
+async function ensureOffscreen() {
+    if (offscreenCreated) return;
+    try {
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['AUDIO_PLAYBACK'],
+            justification: 'Play CORS media for capture'
+        });
+        offscreenCreated = true;
+    } catch (e) {
+        console.error('Failed to create offscreen document', e);
+    }
+}
+
 var g_recognizer_client = (function() {
     this._storage_helper = StorageHelper();
 
@@ -392,6 +408,15 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             if (g_recognizer_client) {
                 g_recognizer_client.clear_history();
             }
+            break;
+        case "cors_source_detected":
+            ensureOffscreen().then(() => {
+                chrome.runtime.sendMessage({
+                    cmd: 'offscreen_play',
+                    src: request.src,
+                    currentTime: request.currentTime
+                });
+            });
             break;
         case "popup_error_relay":
 			request.cmd = "popup_error";

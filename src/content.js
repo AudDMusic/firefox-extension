@@ -1,6 +1,31 @@
 // injected in Firefox
 
 function audioRecorderFirefox() {
+    // Inject a script in the page context to hook media elements that are
+    // created headlessly (without being added to the DOM). Some websites
+    // create Audio/Video elements purely via JavaScript and never append
+    // them, which prevents the content script from discovering them. The
+    // hook appends such elements to the DOM right before they begin
+    // playing so that our recorder can detect them.
+    (function injectHeadlessHook() {
+        const s = document.createElement('script');
+        s.textContent = `(
+            function() {
+                const origPlay = HTMLMediaElement.prototype.play;
+                HTMLMediaElement.prototype.play = function(...args) {
+                    try {
+                        if (!this.isConnected) {
+                            this.style.display = 'none';
+                            document.documentElement.appendChild(this);
+                        }
+                    } catch (e) { console.error('Failed to append media element', e); }
+                    return origPlay.apply(this, args);
+                };
+            }
+        )();`;
+        document.documentElement.appendChild(s);
+        s.remove();
+    })();
 	var AudDRecorder = function(){
 		/**
 		 * REC is a self-contained module for capturing audio from media elements on a page.
@@ -68,9 +93,33 @@ function audioRecorderFirefox() {
 				 * @description Combines all recorded audio chunks into a single Blob.
 				 * @returns {Blob} The final audio recording.
 				 */
-				audio_to_blob() {
-					return new Blob(REC.audio_data, { type: REC.audio_mime });
-				},
+                                audio_to_blob() {
+                                        return new Blob(REC.audio_data, { type: REC.audio_mime });
+                                },
+
+                                /**
+                                 * @description Determine whether a media element's source is cross-origin.
+                                 * First compares the origin of `currentSrc` with the page origin. If it
+                                 * matches, a HEAD request is sent to detect possible redirects to a
+                                 * different origin.
+                                 * @param {HTMLMediaElement} m_elm
+                                 * @returns {Promise<boolean>} true if the source is cross-origin
+                                 */
+                                async isCorsSource(m_elm) {
+                                        try {
+                                                const src = m_elm.currentSrc;
+                                                if (!src) return false;
+                                                const u = new URL(src, document.location.href);
+                                                if (u.origin !== document.location.origin) {
+                                                        return true;
+                                                }
+                                                const res = await fetch(src, { method: 'HEAD' });
+                                                return res.type === 'opaque';
+                                        } catch (e) {
+                                                console.warn('CORS detection failed', e);
+                                                return true;
+                                        }
+                                },
 
 				/**
 				 * @description Stops the recording process.
@@ -145,9 +194,17 @@ function audioRecorderFirefox() {
 						const combinedStream = new MediaStream();
 						let hasAudioTracks = false;
 			  
-						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                // --- Main Element Processing Loop ---
+                                                for (const m_elm of mediaElements) {
+                                                        try {
+                                                                if (await REC.isCorsSource(m_elm)) {
+                                                                        chrome.runtime.sendMessage({
+                                                                                cmd: 'cors_source_detected',
+                                                                                src: m_elm.currentSrc,
+                                                                                currentTime: m_elm.currentTime
+                                                                        });
+                                                                        continue;
+                                                                }
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.

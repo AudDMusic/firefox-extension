@@ -53,5 +53,9 @@
     "activeTab",
     "scripting",
     "tabCapture",
-    "notifications" ]
+    "notifications" ],
+  "web_accessible_resources": [{
+    "resources": ["offscreen.html", "offscreen.js"],
+    "matches": ["<all_urls>"]
+  }]
 }
