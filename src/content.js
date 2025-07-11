@@ -296,19 +296,39 @@ function audioRecorderFirefox() {
 						
 						// Set up event handlers and promises for a clean, asynchronous stop.
 						const recorderStopped = new Promise(resolve => recorder.onstop = resolve);
+						// Promise for recorder error
+						const recorderError = new Promise((resolve, reject) => {
+							recorder.onerror = (event) => {
+								console.error("MediaRecorder error in content.js:", event.error);
+								REC.isRecording = false; // Reset REC's own state if different from global isRecording
+								isRecording = false; // Reset global content script state
+								reject(event.error || new Error("MediaRecorder failed in content.js"));
+							};
+						});
+
 						recorder.ondataavailable = REC.audio_rec_on_data;
 						
-						// Start recording, wait for the specified time, then stop.
 						recorder.start();
-						await wait(rec_time_ms);
-						if (recorder.state === "recording") REC.stop();
-						await recorderStopped; // Wait for onstop to ensure all data is collected.
+
+                        // Wait for recording time OR an error
+                        await Promise.race([
+                            wait(rec_time_ms), // Normal recording duration
+                            recorderError      // Waits for an error from MediaRecorder
+                        ]);
+
+						// If recorderError won, an error was already thrown and caught by the outer .catch()
+						// If wait(rec_time_ms) won, proceed to stop and collect data.
+						if (recorder.state === "recording") {
+							REC.stop(); // This will trigger onstop
+						}
+						await recorderStopped;
 			  
 						return REC.audio_to_blob();
 
 					} catch (error) {
-						console.error("Critical error during recording start:", error);
+						console.error("Critical error during recording start or MediaRecorder error:", error);
 						isRecording = false; // Ensure state is reset on error.
+						isRecording = false; // Ensure state is reset on error, again.
 						throw error;
 					}
 				},
@@ -333,25 +353,34 @@ function audioRecorderFirefox() {
 				console.log("Received command:", request);
 				switch (request.cmd) {
 					case 'to_firefox_start':
-						REC.start(request.data).then(e => {
+						REC.start(request.data).then(e => { // `e` here is the blob
 							var ret = {"status": 0, "data": e};
 							// A sanity check on the blob size to catch empty recordings.
 							if (!e || !e.size || e.size < 1000) { 
 								console.log("Recorded blob is too small or empty:", e);
 								ret = {"status": -1, "data": "audio none: can not record audio."};
 							}
-							onDataAvailable(ret);
-						}).catch(e => {
+							onDataAvailable(ret); // Sends "firefox_ondataavailable"
+						}).catch(e => { // This catches errors thrown from REC.start or rejections from recorder.onerror
+							isRecording = false; // Ensure content script's global isRecording is false on error
 							if (e === 'already_recording' || e === 'no_media' || e === 'cors_offscreen') {
 								if (e === 'no_media') chrome.runtime.sendMessage({ cmd: "frame_no_media" });
-								return; // Gracefully handle expected rejections.
-							}
-							console.error("Recording failed:", e);
-							if (e.message.includes('isolation properties')) {
-								chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "Recording failed: Security features of this website isolate audio from extensions."}});
+								// These are somewhat expected, popup UI should handle them.
 								return;
 							}
-							chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "An unexpected error occurred during recording: " + e}});
+							console.error("Recording failed in content.js promise chain:", e);
+							let errorMessage = "An unexpected error occurred during recording.";
+							if (e instanceof Error) {
+								errorMessage = e.message;
+							} else if (typeof e === 'string') {
+								errorMessage = e;
+							}
+
+							if (errorMessage.includes('isolation properties')) {
+								chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "Recording failed: Security features of this website isolate audio from extensions."}});
+							} else {
+								chrome.runtime.sendMessage({cmd: "popup_error", result: {"status": -1, "text": "Recording Error: " + errorMessage}});
+							}
 						});
 						break;
 					case 'to_firefox_stop':

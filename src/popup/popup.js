@@ -2,23 +2,58 @@ var _audio_recorder = new AudioRecorder();
 var _is_recognizing = false;
 var _info = {};
 var _is_starting = false;
+var recognitionTimeoutId = null;
+var popup_view_instance = null; // Declare globally
 
 function audio_start(record_length) {
+	console.log("[PopupView] audio_start called. _is_recognizing:", _is_recognizing);
 	if (_is_recognizing) {
+		console.log("[PopupView] audio_start: Already recognizing, returning.");
 		return;
 	}
 	_is_recognizing = true;
-	_audio_recorder.start(record_length);
+	console.log("[PopupView] audio_start: _is_recognizing set to true.");
+	_audio_recorder.start(record_length); // This sends 'to_firefox_start' for Firefox
+
+	if (_is_firefox) { // Only set timeout for Firefox path
+        console.log("[PopupView] audio_start: Setting recognition timeout for Firefox.");
+        clearTimeout(recognitionTimeoutId); // Clear any existing timeout
+		recognitionTimeoutId = setTimeout(() => {
+			if (_is_recognizing) { // If still recognizing after timeout
+				console.warn("[PopupView] Recognition timed out in popup.js for Firefox.");
+                if (popup_view_instance) { // Use the global instance
+				    popup_view_instance.show_message(chrome.i18n.getMessage("recognitionTimeout") || "Recognition timed out. Please try again.", 2);
+                } else {
+                    // Fallback if popup_view_instance is not available
+                    console.error("[PopupView] Timeout: popup_view_instance is not defined!");
+                    alert(chrome.i18n.getMessage("recognitionTimeout") || "Recognition timed out. Please try again.");
+                }
+                _is_starting = false;
+                console.log("[PopupView] Timeout: _is_starting set to false.");
+				_audio_stop(); // This will set _is_recognizing to false and clear the timeout.
+			}
+		}, parseInt(record_length, 10) + 5000); // Timeout is record_length + 5 seconds buffer
+        console.log("[PopupView] Recognition timeout SET, duration:", parseInt(record_length, 10) + 5000);
+	}
 }
 function _audio_stop() {
+	console.log("[PopupView] _audio_stop called. _is_recognizing:", _is_recognizing);
 	if (!_is_recognizing) {
+		console.log("[PopupView] _audio_stop: Not recognizing, returning.");
 		return;
 	}
 	if(_audio_recorder) {
 		_audio_recorder.stop();
-	console.log("stopping...:")
+	    console.log("[PopupView] _audio_stop: _audio_recorder.stop() called.");
 	}
-	_is_recognizing = false;
+	_is_recognizing = false; // Critical: set recognizing to false FIRST
+	console.log("[PopupView] _audio_stop: _is_recognizing set to false.");
+
+    if (_is_firefox && recognitionTimeoutId) { // Clear timeout when stopping
+        clearTimeout(recognitionTimeoutId);
+        recognitionTimeoutId = null;
+        console.log("[PopupView] Cleared recognition timeout because audio stopped.");
+    }
 }
 
 
@@ -100,38 +135,44 @@ function RecognizerController(popup_view) {
     var _popup_view = popup_view;
 
     var cancel = function() {
+        console.log("[RecognizerController] cancel called.");
         _popup_view.reset();
         _audio_stop();
     };
 
 
     var start = function() {
+        console.log("[RecognizerController] start called. _is_starting:", _is_starting);
         if (_is_starting) {
-            console.log("Start already in progress, ignoring request");
+            console.log("[RecognizerController] Start already in progress, ignoring request.");
             return;
         }
         
         _is_starting = true;
+        console.log("[RecognizerController] start: _is_starting set to true.");
         cancel();
         
         _popup_view.start();
         
         chrome.windows.getCurrent(w => {
             chrome.tabs.query({active: true, windowId: w.id}, tabs => {
-                console.log(tabs);
+                console.log("[RecognizerController] Current tab for background_start:", tabs[0]);
                 chrome.runtime.sendMessage({cmd: "background_start", tab: tabs[0]});
             });
         });
     };
     var reload = function() {
+        console.log("[RecognizerController] reload called.");
         chrome.runtime.sendMessage({cmd: "background_reload"});
     };
 
     var init = function() {
+        console.log("[RecognizerController] init called.");
         chrome.runtime.sendMessage({cmd: "background_init"});
 		if(_is_firefox) {
 		chrome.windows.getCurrent(w => {
 		  chrome.tabs.query({active: true, windowId: w.id}, tabs => {
+			console.log("[RecognizerController] init: Injecting content script for Firefox for tabs:", tabs);
 			inject_firefox(tabs);
 		  });
 		});
@@ -139,6 +180,7 @@ function RecognizerController(popup_view) {
     };
 
     var clear_history = function() {
+        console.log("[RecognizerController] clear_history called.");
         chrome.runtime.sendMessage({cmd: "background_clear_history", pushData: {buttons:[{title:chrome.i18n.getMessage("yes")},{title:chrome.i18n.getMessage("no")}],
                 title:chrome.i18n.getMessage("confirm"), message:chrome.i18n.getMessage("confirmQuestion"), type:"basic", requireInteraction: true,
                 iconUrl:"../../img/favicon.png"}});
@@ -146,9 +188,11 @@ function RecognizerController(popup_view) {
 
     chrome.runtime.onMessage.addListener(
         function(request, sender, sendResponse) {
+			console.log("[RecognizerController] Message received:", request);
             if (request.cmd === "popup_error" || 
                 request.cmd === "start_recording") {
                 _is_starting = false;
+                console.log("[RecognizerController] onMessage: _is_starting set to false for cmd:", request.cmd);
             }
 			if (
 				request.cmd === "frame_no_media" ||
@@ -163,6 +207,7 @@ function RecognizerController(popup_view) {
 			console.log(request);
             switch (request.cmd) {
 				case "start_recording":
+					console.log("[RecognizerController] Case: start_recording");
 					_info = request.info;
 					var local_lan = chrome.i18n.getUILanguage();
 					if (!local_lan) {
@@ -173,48 +218,66 @@ function RecognizerController(popup_view) {
 					_popup_view.start();
 					break;
 				case "firefox_ondataavailable":
+					console.log("[RecognizerController] Case: firefox_ondataavailable");
 					_audio_recorder.OnDataAvailable(request.result);
-					return;
+					return; // Important: OnDataAvailable might send other messages, so return early.
 				case "get_config":
+					console.log("[RecognizerController] Case: get_config");
 					get_config();
 					break;
                 case "popup_init":
-                    console.log(request);
+                    console.log("[RecognizerController] Case: popup_init", request);
                     _popup_view.refresh(request.data);
-					start();
+					start(); // Calls controller's start, not PopupView's
 					break;
 					
                 case "no_media_all_frames":
-                    // Only stop the animation if no frames found media
+                    console.log("[RecognizerController] Case: no_media_all_frames");
                     _popup_view.stop();
                     _popup_view.show_message(chrome.i18n.getMessage("noAudioOnTab"), 2);
+                    _is_recognizing = false;
+                    _is_starting = false;
+                    console.log("[RecognizerController] no_media_all_frames: _is_recognizing and _is_starting set to false.");
+                    _audio_stop();
                     break;
                 case "popup_reload":
-                    console.log(request);
+                    console.log("[RecognizerController] Case: popup_reload", request);
                     _popup_view.refresh(request.data);
                     if (_is_recognizing) {
+                        console.log("[RecognizerController] popup_reload: Was recognizing, calling _popup_view.start()");
                         _popup_view.start();
                     }
                     break;
                 case "popup_parse_result":
+                    console.log("[RecognizerController] Case: popup_parse_result");
                     _popup_view.show_new_result(request.result["result"]);
                     break;
                 case "no_audio":
+                    console.log("[RecognizerController] Case: no_audio");
                     _popup_view.show_message(chrome.i18n.getMessage("noAudioOnTab"), 2);
+                    _is_recognizing = false;
+                    _is_starting = false;
+                    console.log("[RecognizerController] no_audio: _is_recognizing and _is_starting set to false.");
+                    _audio_stop();
                     break;
                 case "no_result":
+                    console.log("[RecognizerController] Case: no_result");
                     _popup_view.show_no_result();
                     break;
                 case "popup_error":
-                    console.log(request.result);
-					if(request.result["msg"] != "" && request.result["msg"] != undefined) {
+                    console.log("[RecognizerController] Case: popup_error", request.result);
+                    // _is_starting is set to false at the top of the listener if cmd is "popup_error".
+                    _is_recognizing = false;
+                    console.log("[RecognizerController] popup_error: _is_recognizing set to false.");
+                    _audio_stop();
+                    if(request.result["msg"] != "" && request.result["msg"] != undefined) {
 						_popup_view.show_message(chrome.i18n.getMessage(request.result["msg"]), request.result["status"]);
 					} else {
 						_popup_view.show_message(request.result["text"], request.result["status"]);
 					}
                     break;
                 case "popup_message":
-                    console.log(request.result);
+                    console.log("[RecognizerController] Case: popup_message", request.result);
 					if(request.result["msg"] != "" && request.result["msg"] != undefined) {
 						_popup_view.show_message(chrome.i18n.getMessage(request.result["msg"]));
 					} else {
@@ -222,13 +285,15 @@ function RecognizerController(popup_view) {
 					}
                     break;
                 case "popup_update_version":
-                    console.log(request.result);
+                    console.log("[RecognizerController] Case: popup_update_version", request.result);
                     _popup_view.show_message(request.result["msg"], -1);
                     break;
                 case "popup_login":
+                    console.log("[RecognizerController] Case: popup_login");
                     _popup_view.show_message(chrome.i18n.getMessage("signIn"), -1);
                     break;
                 case "popup_show_settings":
+                    console.log("[RecognizerController] Case: popup_show_settings");
 					$('#token_input').val(request.api_token);
 					$('#recordingLength').val(request.record_length / 100);
 					$('#recordingLengthText').text((request.record_length / 1000) + "s")
@@ -267,9 +332,9 @@ function init() {
         return fmt;
     };
 	
-	
-    var popup_view = PopupView();
-    var recognizer_controller = RecognizerController(popup_view);
+	// Assign to the global instance here
+    popup_view_instance = PopupView();
+    var recognizer_controller = RecognizerController(popup_view_instance); // Pass it to controller
 	
     $('.logo[screen="initial"]').on('click', function() {
         recognizer_controller.start();
@@ -776,17 +841,19 @@ function PopupView() {
 	activateScreenButtons();
 
     var show_message = function(msg, level) {
-		if(level == 2) {
+		if(level == 2) { // Critical error display
 			running = false;
 			clearInterval(audio_bands_func);
-			$("#main_footer").show();
-			console.log(msg);
+			$("#main_footer").show(); // Error messages are shown in footer
+			// console.log(msg); // Logged by caller
 			var music_info_html = Mustache.render(_show_error_template_str, {"history": recognitionHistory, "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText")});
 			$('#initial_screen_info').html(music_info_html).ready(function(){
 				loadCoverImages();
 			});
-			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found")
+            // Remove other states, add 'show-error' state
+			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found start");
 			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").addClass("show-error");
+            $(".audio-bands").css("opacity", "0"); // Ensure bands are hidden in error state
 			activateScreenButtons();
 			msg = "<p>" + msg + "</p>";
 			$("#footer_msg").html(msg).ready(function(){
@@ -813,13 +880,19 @@ function PopupView() {
         $("#main_header").hide();
         $("#main_header h1").html(msg);
         $("#main_header").addClass(show_class);
-        $("#main_header").slideDown(msg);
-		setTimeout(() => $("#main_header").removeClass(show_class), 2000);
+        $("#main_header").slideDown("fast"); // Use a defined speed
+		setTimeout(() => {
+            $("#main_header").removeClass(show_class).slideUp("fast"); // Slide up for a cleaner disappearance
+        }, 3000); // Timeout for message visibility
     };
 
     var show_new_result = function(song) {
 		running = false;
         clearInterval(audio_bands_func);
+        // Reset core animation classes to a base state (e.g. 'found') before showing results
+        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("start show-error").addClass("found");
+        $(".audio-bands").css("opacity", "0"); // Ensure bands are hidden
+		$("#main_footer").hide(); // Results view doesn't use the generic footer message area
 		
 		song = getCover(song);
 		song.playsAt = chrome.i18n.getMessage("playsAt");
@@ -840,7 +913,7 @@ function PopupView() {
             loadCoverImages();
             var padding_for_buttons = 88;
             var patreon_height = 0; // Height of Patreon banner + margins
-            if(_info.api_token) patreon_height = 0;
+            if (_info && _info.api_token) patreon_height = 0; // Check if _info exists
             var bottom_content_height = $("body").height() - $(".cover-content").height();
             var history_height = bottom_content_height - padding_for_buttons - patreon_height;
             $(".bottom-content").css("height", bottom_content_height);
@@ -854,12 +927,16 @@ function PopupView() {
 				copyTextToClipboard(decodeURIComponent($(this).attr("copy-text")));
             });
 			setTimeout(function(){
-				var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
-				$(".sub_menu").css("left", share_left);
+                if ($(".share").length && $(".sub_menu").length && $(".share").offset()) { // Check elements exist
+				    var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
+				    $(".sub_menu").css("left", share_left);
+                }
 			}, 100);
 			setTimeout(function(){
-				var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
-				$(".sub_menu").css("left", share_left);
+                if ($(".share").length && $(".sub_menu").length && $(".share").offset()) { // Check elements exist
+				    var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
+				    $(".sub_menu").css("left", share_left);
+                }
 			}, 1000);
             $('#patreon-link').on('click', function() {
                 chrome.tabs.create({url: 'https://www.patreon.com/audd'});
@@ -869,7 +946,7 @@ function PopupView() {
                 $('.patreon-suggestion').fadeOut();
             });
             
-            if(_info.api_token) {
+            if (_info && _info.api_token) { // Check if _info exists
                 $('.patreon-suggestion').hide();
             }
 		});
@@ -882,7 +959,11 @@ function PopupView() {
     var show_no_result = function() {
 		running = false;
         clearInterval(audio_bands_func);
-		console.log(recognitionHistory);
+        // Reset core animation classes
+        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("start show-error").addClass("found");
+        $(".audio-bands").css("opacity", "0"); // Ensure bands are hidden
+		$("#main_footer").hide();
+		// console.log(recognitionHistory); // Logged by caller
         var music_info_html = Mustache.render(_no_results_template_str, {"history": recognitionHistory, 
 			"tryAgainText": chrome.i18n.getMessage("tryAgainText"), "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText"), 
 			"noMatchesText": chrome.i18n.getMessage("noMatchesText")});
@@ -946,33 +1027,37 @@ function PopupView() {
 
 
     var start = function() {
-		if(running) return;
+		if(running) return; // Already running, do nothing
 		running = true;
         $("#main_header").hide();
 		$("#main_footer").hide();
-        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found")
-        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("show-error")
+        // Remove potentially conflicting states
+        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found show-error");
+        // Add 'start' state
         $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").addClass("start");
-        $(".audio-bands").css("opacity", "1");
+        $(".audio-bands").css("opacity", "1"); // Make bands visible
         audio_bands_func = setInterval(function(band) {
             $(".audio-band").removeClass("active");
             $(".audio-band." + audio_band % 3).addClass("active");
             audio_band++;
         }, 500);
-		$('#initial_screen_info').html("");
+		$('#initial_screen_info').html(""); // Clear previous results/messages
     };
 
     var stop = function() {
 		running = false;
         clearInterval(audio_bands_func);
-        if ($("#initial_screen_album").attr("src") == "../../img/microphone.gif")
-            $("#initial_screen_album").attr("src", "../../img/auddio-mic-logo.png")
-        $("#initial_screen_album").removeClass("searching");
-		$("#main_footer").hide();
+        // if ($("#initial_screen_album").attr("src") == "../../img/microphone.gif") // Old GIF logic
+        //     $("#initial_screen_album").attr("src", "../../img/auddio-mic-logo.png")
+        // $("#initial_screen_album").removeClass("searching");
+		$("#main_footer").hide(); // Often shown by error view, so hide it if stopping to idle
 
-        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("start");
-        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("show-error");
+        // Remove 'start' (recording) and 'show-error' (error) classes
+        $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("start show-error");
+        // Add 'found' class (idle/ready state)
         $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").addClass("found");
+        // Ensure bands are hidden if stop is called
+        $(".audio-bands").css("opacity", "0");
     };
 
     var reset = function() {
