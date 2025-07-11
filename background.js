@@ -394,17 +394,18 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 g_recognizer_client.clear_history();
             }
             break;
-        case "create_offscreen_element":
-            const a = new Audio();
-            a.crossOrigin = 'anonymous';
-            a.src = request.src;
-            a.currentTime = request.time || 0;
-            a.preload = 'auto';
-            corsElements[request.src] = a;
-            a.addEventListener('canplay', () => {
-                a.play().catch(() => {});
+        case "create_offscreen_element": {
+            const offscreenAudio = new Audio();
+            offscreenAudio.crossOrigin = 'anonymous';
+            offscreenAudio.src = request.src;
+            offscreenAudio.currentTime = request.time || 0;
+            offscreenAudio.preload = 'auto';
+            corsElements[request.src] = offscreenAudio;
+            offscreenAudio.addEventListener('canplay', () => {
+                offscreenAudio.play().catch(() => {});
             }, { once: true });
             break;
+        }
         case "popup_error_relay":
                         request.cmd = "popup_error";
             chrome.runtime.sendMessage(request);
