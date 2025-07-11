@@ -233,6 +233,27 @@ chrome.windows.onRemoved.addListener(function(windowId) {
 let noMediaFrames = 0;
 let totalFrames = 0;
 
+async function captureFromUrl(src, time, length) {
+    try {
+        const audio = new Audio();
+        audio.crossOrigin = 'anonymous';
+        audio.src = src;
+        if (time) audio.currentTime = time;
+        await audio.play().catch(() => {});
+        const stream = audio.captureStream();
+        const chunks = [];
+        const rec = new MediaRecorder(stream, {mimeType: 'audio/webm'});
+        rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+        rec.start();
+        setTimeout(() => rec.stop(), length || 5000);
+        await new Promise(r => rec.onstop = r);
+        const blob = new Blob(chunks, {type: 'audio/webm'});
+        chrome.runtime.sendMessage({cmd: 'firefox_ondataavailable', result: {status:0, data: blob}});
+    } catch (e) {
+        chrome.runtime.sendMessage({cmd: 'popup_error', result: {status:-1, text: 'Background capture failed: ' + e}});
+    }
+}
+
 
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 	console.log(request);
@@ -398,8 +419,11 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":
-			request.cmd = "popup_message";
+                        request.cmd = "popup_message";
             chrome.runtime.sendMessage(request);
+            break;
+        case "background_capture_from_url":
+            captureFromUrl(request.src, request.time, request.length);
             break;
     }
 

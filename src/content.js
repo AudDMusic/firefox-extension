@@ -1,5 +1,18 @@
 // injected in Firefox
 
+// Inject a script into the main world that ensures headless media elements are
+// appended to the DOM so we can discover them later.
+(function injectHook(){
+    try {
+        const s = document.createElement('script');
+        s.src = chrome.runtime.getURL('src/hook.js');
+        s.onload = () => s.remove();
+        (document.head || document.documentElement).appendChild(s);
+    } catch(e) {
+        console.error('Failed to inject hook', e);
+    }
+})();
+
 function audioRecorderFirefox() {
 	var AudDRecorder = function(){
 		/**
@@ -33,8 +46,8 @@ function audioRecorderFirefox() {
 				 * potential media sources.
 				 * @returns {HTMLMediaElement[]} An array of active media elements.
 				 */
-				get_media_elements() {
-				  const getAllMediaElements = (root) => {
+                                get_media_elements() {
+                                  const getAllMediaElements = (root) => {
 					let mediaElements = [];
 					// Use a TreeWalker for an efficient, deep traversal of the DOM.
 					const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null, false);
@@ -50,8 +63,26 @@ function audioRecorderFirefox() {
 					}
 					return mediaElements;
 				  };
-				  return getAllMediaElements(document);
-				},
+                                  return getAllMediaElements(document);
+                                },
+
+                                /**
+                                 * Determine if a media element's source is cross-origin.
+                                 * Uses origin comparison and a HEAD request to detect redirects.
+                                 */
+                                async isCorsSource(m_elm) {
+                                  try {
+                                    const url = new URL(m_elm.currentSrc, document.location.href);
+                                    if (url.origin === document.location.origin) {
+                                      return false;
+                                    }
+                                    const resp = await fetch(url.href, {method: 'HEAD', redirect: 'follow', mode: 'no-cors'});
+                                    return resp.type === 'opaque';
+                                  } catch(e) {
+                                    console.warn('CORS check failed', e);
+                                    return true;
+                                  }
+                                },
 
 				/**
 				 * @description Event handler for the MediaRecorder's 'dataavailable' event.
@@ -146,8 +177,12 @@ function audioRecorderFirefox() {
 						let hasAudioTracks = false;
 			  
 						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                for (const m_elm of mediaElements) {
+                                                        try {
+                                                                if (await REC.isCorsSource(m_elm)) {
+                                                                        chrome.runtime.sendMessage({cmd: 'background_capture_from_url', src: m_elm.currentSrc, time: m_elm.currentTime, length: rec_time_ms});
+                                                                        continue;
+                                                                }
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.
