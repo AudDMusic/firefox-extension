@@ -1,5 +1,7 @@
 // injected in Firefox
 
+const offscreenClones = new Map();
+
 function audioRecorderFirefox() {
 	var AudDRecorder = function(){
 		/**
@@ -74,8 +76,8 @@ function audioRecorderFirefox() {
 
 				/**
 				 * @description Stops the recording process.
-				 */
-				stop() {
+                                */
+                                stop() {
                     // IMPORTANT: This function ONLY stops the MediaRecorder.
                     // It DOES NOT close the AudioContexts created in `start()`. Closing them
                     // would sever the audio routing and mute the element. The contexts are
@@ -83,8 +85,17 @@ function audioRecorderFirefox() {
 					if (REC.audio_recorder && REC.audio_recorder.state === "recording") {
 						REC.audio_recorder.stop();
                     }
+                    for (const [orig, clone] of offscreenClones.entries()) {
+                        clone.pause();
+                        clone.remove();
+                        chrome.runtime.sendMessage({
+                            cmd: 'revoke_offscreen_element',
+                            src: orig.currentSrc
+                        });
+                    }
+                    offscreenClones.clear();
                     isRecording = false;
-				},
+                                },
 
 				/**
 				 * @description Handles CORS errors by reloading the media element.
@@ -116,6 +127,60 @@ function audioRecorderFirefox() {
 					if (wasPlaying) await m_elm.play();
 					console.log("Media reloaded successfully.");
 				},
+                                async isCorsSource(m_elm) {
+                                    try {
+                                        const src = m_elm.currentSrc || m_elm.src;
+                                        if (!src) return false;
+                                        const elemOrigin = new URL(src, document.baseURI).origin;
+                                        if (elemOrigin !== document.location.origin) {
+                                            return true;
+                                        }
+                                        const resp = await chrome.runtime.sendMessage({
+                                            cmd: 'check_cors_redirect',
+                                            src
+                                        });
+                                        return resp && resp.crossOrigin;
+                                    } catch (e) {
+                                        return false;
+                                    }
+                                },
+
+                                async createOffscreenClone(elem) {
+                                    if (offscreenClones.has(elem)) {
+                                        return offscreenClones.get(elem);
+                                    }
+                                    const resp = await chrome.runtime.sendMessage({
+                                        cmd: 'create_offscreen_element',
+                                        src: elem.currentSrc
+                                    });
+                                    const clone = new Audio();
+                                    clone.src = (resp && resp.blobUrl) ? resp.blobUrl : elem.currentSrc;
+                                    clone.crossOrigin = 'anonymous';
+                                    clone.volume = 0.02;
+                                    clone.preload = 'auto';
+                                    clone.currentTime = elem.currentTime;
+                                    clone.style.display = 'none';
+                                    (document.documentElement || document.body).appendChild(clone);
+                                    clone.addEventListener('canplay', () => clone.play().catch(() => {}), { once: true });
+
+                                    const cleanup = () => {
+                                        clone.pause();
+                                        clone.remove();
+                                        offscreenClones.delete(elem);
+                                        if (resp && resp.blobUrl) {
+                                            chrome.runtime.sendMessage({
+                                                cmd: 'revoke_offscreen_element',
+                                                src: elem.currentSrc
+                                            });
+                                        }
+                                    };
+                                    elem.addEventListener('pause', cleanup, { once: true });
+                                    elem.addEventListener('ended', cleanup, { once: true });
+                                    window.addEventListener('pagehide', cleanup, { once: true });
+
+                                    offscreenClones.set(elem, clone);
+                                    return clone;
+                                },
 
 				/**
 				 * @description The main function to start the recording process.
@@ -141,59 +206,72 @@ function audioRecorderFirefox() {
 							return Promise.reject('no_media');
 						}
 
-						// This stream will collect audio tracks from all sources.
-						const combinedStream = new MediaStream();
-						let hasAudioTracks = false;
+                                                // This stream will collect audio tracks from all sources.
+                                                const combinedStream = new MediaStream();
+                                                let hasAudioTracks = false;
 			  
 						// --- Main Element Processing Loop ---
-						for (const m_elm of mediaElements) {
-							try {
+                                                for (const m_elm of mediaElements) {
+                                                        try {
+                                let elemForRecording = m_elm;
+                                if (await REC.isCorsSource(m_elm)) {
+                                    try {
+                                        elemForRecording = await REC.createOffscreenClone(m_elm);
+                                    } catch (cloneErr) {
+                                        chrome.runtime.sendMessage({
+                                            cmd: "offscreen_capture",
+                                            src: m_elm.currentSrc,
+                                            currentTime: m_elm.currentTime,
+                                            duration: rec_time_ms
+                                        });
+                                        isRecording = false;
+                                        return Promise.reject("cors_offscreen");
+                                    }
+                                }
+
                                 // --- CRITICAL PASSTHROUGH LOGIC ---
                                 // This block ensures the element's audio is not muted.
                                 // We check if we've already set up the passthrough to avoid redundant work.
-                                if (!m_elm._auddPassthroughActive) {
-                                    console.log("Setting up audio passthrough for element:", m_elm);
+                                if (!elemForRecording._auddPassthroughActive) {
+                                    console.log("Setting up audio passthrough for element:", elemForRecording);
                                     const passthroughCtx = new AudioContext();
                                     let source;
                                     try {
                                         // Attempt to create a source. This is where CORS errors occur.
-                                        source = passthroughCtx.createMediaElementSource(m_elm);
+                                        source = passthroughCtx.createMediaElementSource(elemForRecording);
                                     } catch(err) {
-                                        // If it's a security error, try the CORS reload workaround.
                                         if (err.name === 'SecurityError') {
-                                            await REC._reloadMediaForCors(m_elm);
-                                            source = passthroughCtx.createMediaElementSource(m_elm);
-                                        } else { throw err; } // Re-throw other, unrecoverable errors.
+                                            await REC._reloadMediaForCors(elemForRecording);
+                                            source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                        } else { throw err; }
                                     }
-                                    // This line is the key: it routes the audio to the speakers.
                                     source.connect(passthroughCtx.destination);
-                                    // Mark the element as processed so we don't do this again.
-                                    m_elm._auddPassthroughActive = true;
+                                    elemForRecording._auddPassthroughActive = true;
                                 }
 
 								// --- GET THE STREAM FOR THE RECORDER ---
-								let streamForRecording;
-								if (m_elm.captureStream) {
-									streamForRecording = m_elm.captureStream(); // Modern standard
-								} else if (m_elm.mozCaptureStream) {
-									streamForRecording = m_elm.mozCaptureStream(); // Firefox-specific
-								} else {
+                                                                let streamForRecording;
+                                                                if (elemForRecording.captureStream) {
+                                                                        streamForRecording = elemForRecording.captureStream(); // Modern standard
+                                                                } else if (elemForRecording.mozCaptureStream) {
+                                                                        streamForRecording = elemForRecording.mozCaptureStream(); // Firefox-specific
+                                                                } else {
                                     // Last resort fallback: create a new context just for streaming.
                                     const fallbackCtx = new AudioContext();
-									const fallbackSource = fallbackCtx.createMediaElementSource(m_elm);
+                                                                        const fallbackSource = fallbackCtx.createMediaElementSource(elemForRecording);
                                     const destination = fallbackCtx.createMediaStreamDestination();
                                     fallbackSource.connect(destination);
-									streamForRecording = destination.stream;
-								}
+                                                                        streamForRecording = destination.stream;
+                                                                }
 				
 								// Add any found audio tracks to our main combined stream.
-								if (streamForRecording && streamForRecording.getAudioTracks().length > 0) {
-									streamForRecording.getAudioTracks().forEach(track => combinedStream.addTrack(track));
-									hasAudioTracks = true;
-								}
-							} catch(err) {
-								console.error("Failed to process audio for element, skipping:", m_elm, err);
-							}
+                                                                if (streamForRecording && streamForRecording.getAudioTracks().length > 0) {
+                                                                        streamForRecording.getAudioTracks().forEach(track => combinedStream.addTrack(track));
+                                                                        hasAudioTracks = true;
+                                                                }
+                                                        } catch(err) {
+                                                                console.error("Failed to process audio for element, skipping:", elemForRecording, err);
+                                                        }
 						}
 			  
 						// If, after checking all elements, we have no audio, abort.
@@ -254,7 +332,7 @@ function audioRecorderFirefox() {
 							}
 							onDataAvailable(ret);
 						}).catch(e => {
-							if (e === 'already_recording' || e === 'no_media') {
+							if (e === 'already_recording' || e === 'no_media' || e === 'cors_offscreen') {
 								if (e === 'no_media') chrome.runtime.sendMessage({ cmd: "frame_no_media" });
 								return; // Gracefully handle expected rejections.
 							}
@@ -285,6 +363,21 @@ function audioRecorderFirefox() {
         marker.id = 'audd-recorder-marker';
         marker.style.display = 'none';
         document.body.appendChild(marker);
+        // Inject a script in the main page context to hook media elements
+        const hookScript = document.createElement('script');
+        hookScript.id = 'audd-headless-hook';
+        hookScript.textContent = '(' + function() {
+            const origPlay = HTMLMediaElement.prototype.play;
+            HTMLMediaElement.prototype.play = function(...args) {
+                if (!this.isConnected) {
+                    this.style.display = 'none';
+                    (document.documentElement || document.body).appendChild(this);
+                }
+                return origPlay.apply(this, args);
+            };
+        } + ')();';
+        (document.head || document.documentElement).appendChild(hookScript);
+        hookScript.remove();
         
         window.AudDRecorder = AudDRecorder;
         console.log("injected firefox");
