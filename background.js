@@ -233,6 +233,32 @@ chrome.windows.onRemoved.addListener(function(windowId) {
 let noMediaFrames = 0;
 let totalFrames = 0;
 
+async function offscreenCapture(src, currentTime, duration) {
+    try {
+        const response = await fetch(src);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio();
+        audio.src = url;
+        audio.crossOrigin = "anonymous";
+        audio.currentTime = currentTime || 0;
+        await audio.play();
+        const stream = audio.captureStream ? audio.captureStream() : audio.mozCaptureStream();
+        const recorder = new MediaRecorder(stream, {mimeType: "audio/webm", audioBitsPerSecond: 128000});
+        let chunks = [];
+        recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+        recorder.start();
+        await new Promise(r => setTimeout(r, duration));
+        recorder.stop();
+        await new Promise(r => recorder.onstop = r);
+        const recBlob = new Blob(chunks, {type: "audio/webm"});
+        chrome.runtime.sendMessage({cmd: "firefox_ondataavailable", result: {status: 0, data: recBlob}});
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        chrome.runtime.sendMessage({cmd: "firefox_ondataavailable", result: {status: -1, data: err.message}});
+    }
+}
+
 
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 	console.log(request);
@@ -392,6 +418,9 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             if (g_recognizer_client) {
                 g_recognizer_client.clear_history();
             }
+            break;
+        case "offscreen_capture":
+            offscreenCapture(request.src, request.currentTime, request.duration);
             break;
         case "popup_error_relay":
 			request.cmd = "popup_error";

@@ -116,6 +116,16 @@ function audioRecorderFirefox() {
 					if (wasPlaying) await m_elm.play();
 					console.log("Media reloaded successfully.");
 				},
+                                async isCorsSource(m_elm) {
+                                    try {
+                                        const url = new URL(m_elm.currentSrc, location.href);
+                                        if (url.origin !== location.origin) return true;
+                                        const resp = await fetch(url.href, {method:"HEAD", redirect:"follow"});
+                                        return (new URL(resp.url).origin !== location.origin) || resp.type === "opaque";
+                                    } catch (e) {
+                                        return true;
+                                    }
+                                },
 
 				/**
 				 * @description The main function to start the recording process.
@@ -141,7 +151,15 @@ function audioRecorderFirefox() {
 							return Promise.reject('no_media');
 						}
 
-						// This stream will collect audio tracks from all sources.
+
+                                                for (const elm of mediaElements) {
+                                                        if (await REC.isCorsSource(elm)) {
+                                                                chrome.runtime.sendMessage({cmd: "offscreen_capture", src: elm.currentSrc, currentTime: elm.currentTime, duration: rec_time_ms});
+                                                                isRecording = false;
+                                                                return Promise.reject("cors_offscreen");
+                                                        }
+                                                }
+                                                // This stream will collect audio tracks from all sources.
 						const combinedStream = new MediaStream();
 						let hasAudioTracks = false;
 			  
@@ -254,7 +272,7 @@ function audioRecorderFirefox() {
 							}
 							onDataAvailable(ret);
 						}).catch(e => {
-							if (e === 'already_recording' || e === 'no_media') {
+							if (e === 'already_recording' || e === 'no_media' || e === 'cors_offscreen') {
 								if (e === 'no_media') chrome.runtime.sendMessage({ cmd: "frame_no_media" });
 								return; // Gracefully handle expected rejections.
 							}
@@ -285,6 +303,12 @@ function audioRecorderFirefox() {
         marker.id = 'audd-recorder-marker';
         marker.style.display = 'none';
         document.body.appendChild(marker);
+        // Inject a script in the main page context to hook media elements
+        const hookScript = document.createElement("script");
+        hookScript.id = "audd-headless-hook";
+        hookScript.src = chrome.runtime.getURL("src/headless-hook.js");
+        (document.head || document.documentElement).appendChild(hookScript);
+        hookScript.remove();
         
         window.AudDRecorder = AudDRecorder;
         console.log("injected firefox");
