@@ -194,6 +194,17 @@ function RecognizerController(popup_view) {
                 _is_starting = false;
                 console.log("[RecognizerController] onMessage: _is_starting set to false for cmd:", request.cmd);
             }
+			if (
+				request.cmd === "frame_no_media" ||
+				request.cmd === "create_offscreen_element" ||
+				request.cmd === "revoke_offscreen_element" ||
+				request.cmd === "check_cors_redirect" ||
+				request.cmd === "offscreen_capture"
+			) {
+				console.log("Ignoring cmd in popup:", request.cmd, request);
+				return;
+			}
+			console.log(request);
             switch (request.cmd) {
 				case "start_recording":
 					console.log("[RecognizerController] Case: start_recording");
