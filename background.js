@@ -450,9 +450,11 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 .then(resp => {
                     const original = new URL(request.src).origin;
                     const finalOrigin = new URL(resp.url).origin;
-                    sendResponse({ crossOrigin: finalOrigin !== original });
+                    const statusOk = resp.status >= 200 && resp.status < 300;
+                    // Treat any non-OK status or origin change as cross origin.
+                    sendResponse({ crossOrigin: !statusOk || finalOrigin !== original });
                 })
-                .catch(() => sendResponse({ crossOrigin: false }));
+                .catch(() => sendResponse({ crossOrigin: true }));
             return true;
         }
         case "offscreen_capture":
