@@ -130,31 +130,35 @@ function audioRecorderFirefox() {
                                 async isCorsSource(m_elm) {
                                     try {
                                         const src = m_elm.currentSrc || m_elm.src;
-                                        if (!src) return false;
+                                        if (!src) return { isCors: false, finalUrl: src };
                                         const elemOrigin = new URL(src, document.baseURI).origin;
                                         if (elemOrigin !== document.location.origin) {
-                                            return true;
+                                            return { isCors: true, finalUrl: src };
                                         }
                                         const resp = await chrome.runtime.sendMessage({
                                             cmd: 'check_cors_redirect',
                                             src
                                         });
-                                        return resp && resp.crossOrigin;
+                                        return {
+                                            isCors: resp && resp.crossOrigin,
+                                            finalUrl: (resp && resp.finalUrl) ? resp.finalUrl : src
+                                        };
                                     } catch (e) {
-                                        return false;
+                                        return { isCors: false, finalUrl: m_elm.currentSrc || m_elm.src };
                                     }
                                 },
 
-                                async createOffscreenClone(elem) {
+                                async createOffscreenClone(elem, finalSrc) {
                                     if (offscreenClones.has(elem)) {
                                         return offscreenClones.get(elem);
                                     }
                                     const resp = await chrome.runtime.sendMessage({
                                         cmd: 'create_offscreen_element',
-                                        src: elem.currentSrc
+                                        src: finalSrc || elem.currentSrc
                                     });
                                     const clone = new Audio();
-                                    clone.src = (resp && resp.blobUrl) ? resp.blobUrl : elem.currentSrc;
+                                    const srcToUse = (resp && resp.blobUrl) ? resp.blobUrl : (finalSrc || elem.currentSrc);
+                                    clone.src = srcToUse;
                                     clone.crossOrigin = 'anonymous';
                                     clone.volume = 0.02;
                                     clone.preload = 'auto';
@@ -224,13 +228,14 @@ function audioRecorderFirefox() {
                                                 for (const m_elm of mediaElements) {
                                                         try {
                                 let elemForRecording = m_elm;
-                                if (await REC.isCorsSource(m_elm)) {
+                                const { isCors, finalUrl } = await REC.isCorsSource(m_elm);
+                                if (isCors) {
                                     try {
-                                        elemForRecording = await REC.createOffscreenClone(m_elm);
+                                        elemForRecording = await REC.createOffscreenClone(m_elm, finalUrl);
                                     } catch (cloneErr) {
                                         chrome.runtime.sendMessage({
                                             cmd: "offscreen_capture",
-                                            src: m_elm.currentSrc,
+                                            src: finalUrl,
                                             currentTime: m_elm.currentTime,
                                             duration: rec_time_ms
                                         });
