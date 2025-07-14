@@ -237,14 +237,12 @@ var corsElements = {};
 
 async function offscreenCapture(src, currentTime, duration) {
     try {
-        const response = await fetch(src);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
         const audio = new Audio();
-        audio.src = url;
+        audio.src = src;
         audio.crossOrigin = "anonymous";
         audio.currentTime = currentTime || 0;
         await audio.play();
+
         const stream = audio.captureStream ? audio.captureStream() : audio.mozCaptureStream();
         const recorder = new MediaRecorder(stream, {mimeType: "audio/webm", audioBitsPerSecond: 128000});
         let chunks = [];
@@ -252,10 +250,10 @@ async function offscreenCapture(src, currentTime, duration) {
         recorder.start();
         await new Promise(r => setTimeout(r, duration));
         recorder.stop();
-        await new Promise(r => recorder.onstop = r);
+        await new Promise(r => (recorder.onstop = r));
+
         const recBlob = new Blob(chunks, {type: "audio/webm"});
         chrome.runtime.sendMessage({cmd: "firefox_ondataavailable", result: {status: 0, data: recBlob}});
-        URL.revokeObjectURL(url);
     } catch (err) {
         chrome.runtime.sendMessage({cmd: "firefox_ondataavailable", result: {status: -1, data: err.message}});
     }
@@ -450,9 +448,11 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 .then(resp => {
                     const original = new URL(request.src).origin;
                     const finalOrigin = new URL(resp.url).origin;
-                    sendResponse({ crossOrigin: finalOrigin !== original });
+                    const statusOk = resp.status >= 200 && resp.status < 300;
+                    // Treat any non-OK status or origin change as cross origin.
+                    sendResponse({ crossOrigin: !statusOk || finalOrigin !== original });
                 })
-                .catch(() => sendResponse({ crossOrigin: false }));
+                .catch(() => sendResponse({ crossOrigin: true }));
             return true;
         }
         case "offscreen_capture":

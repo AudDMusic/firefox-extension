@@ -129,12 +129,26 @@ function audioRecorderFirefox() {
 				},
                                 async isCorsSource(m_elm) {
                                     try {
-                                        const src = m_elm.currentSrc || m_elm.src;
+                                        let src = m_elm.currentSrc || m_elm.src;
                                         if (!src) return false;
-                                        const elemOrigin = new URL(src, document.baseURI).origin;
+                                        let elemOrigin = new URL(src, document.baseURI).origin;
                                         if (elemOrigin !== document.location.origin) {
                                             return true;
                                         }
+
+                                        await new Promise(resolve => {
+                                            if (m_elm.readyState >= 2) {
+                                                resolve();
+                                            } else {
+                                                m_elm.addEventListener('loadedmetadata', resolve, { once: true });
+                                            }
+                                        });
+                                        src = m_elm.currentSrc || m_elm.src;
+                                        elemOrigin = new URL(src, document.baseURI).origin;
+                                        if (elemOrigin !== document.location.origin) {
+                                            return true;
+                                        }
+
                                         const resp = await chrome.runtime.sendMessage({
                                             cmd: 'check_cors_redirect',
                                             src
