@@ -135,11 +135,18 @@ function audioRecorderFirefox() {
                                         if (elemOrigin !== document.location.origin) {
                                             return true;
                                         }
-                                        const resp = await chrome.runtime.sendMessage({
-                                            cmd: 'check_cors_redirect',
-                                            src
-                                        });
-                                        return resp && resp.crossOrigin;
+                                        const testCtx = new AudioContext();
+                                        try {
+                                            testCtx.createMediaElementSource(m_elm);
+                                            await testCtx.close();
+                                            return false;
+                                        } catch (err) {
+                                            await testCtx.close();
+                                            if (err.name === 'SecurityError') {
+                                                return true;
+                                            }
+                                            throw err;
+                                        }
                                     } catch (e) {
                                         return false;
                                     }
@@ -251,8 +258,28 @@ function audioRecorderFirefox() {
                                         source = passthroughCtx.createMediaElementSource(elemForRecording);
                                     } catch(err) {
                                         if (err.name === 'SecurityError') {
-                                            await REC._reloadMediaForCors(elemForRecording);
-                                            source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                            try {
+                                                await REC._reloadMediaForCors(elemForRecording);
+                                                source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                            } catch(err2) {
+                                                try {
+                                                    if (elemForRecording === m_elm) {
+                                                        elemForRecording = await REC.createOffscreenClone(m_elm);
+                                                        source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                                    } else {
+                                                        throw err2;
+                                                    }
+                                                } catch(cloneErr) {
+                                                    chrome.runtime.sendMessage({
+                                                        cmd: 'offscreen_capture',
+                                                        src: m_elm.currentSrc,
+                                                        currentTime: m_elm.currentTime,
+                                                        duration: rec_time_ms
+                                                    });
+                                                    isRecording = false;
+                                                    return Promise.reject('cors_offscreen');
+                                                }
+                                            }
                                         } else { throw err; }
                                     }
                                     source.connect(passthroughCtx.destination);
