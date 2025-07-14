@@ -452,7 +452,12 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                     const finalOrigin = new URL(resp.url).origin;
                     sendResponse({ crossOrigin: finalOrigin !== original });
                 })
-                .catch(() => sendResponse({ crossOrigin: false }));
+                .catch(() => {
+                    // If the HEAD request fails (e.g. method not allowed or
+                    // blocked by CORS), assume the source is cross-origin so
+                    // we can fall back to the safer offscreen capture logic.
+                    sendResponse({ crossOrigin: true });
+                });
             return true;
         }
         case "offscreen_capture":

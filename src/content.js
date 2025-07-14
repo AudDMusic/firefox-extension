@@ -141,7 +141,10 @@ function audioRecorderFirefox() {
                                         });
                                         return resp && resp.crossOrigin;
                                     } catch (e) {
-                                        return false;
+                                        // When in doubt (e.g. fetch failed), assume it's
+                                        // a cross-origin source so the safer offscreen
+                                        // capture path is used.
+                                        return true;
                                     }
                                 },
 
