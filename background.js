@@ -446,7 +446,12 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             break;
         }
         case "check_cors_redirect": {
-            fetch(request.src, { method: 'HEAD', redirect: 'follow' })
+            fetch(request.src, {
+                method: 'GET',
+                headers: { 'Range': 'bytes=0-0' },
+                redirect: 'follow',
+                mode: 'no-cors'
+            })
                 .then(resp => {
                     const original = new URL(request.src).origin;
                     const finalOrigin = new URL(resp.url).origin;

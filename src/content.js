@@ -141,6 +141,7 @@ function audioRecorderFirefox() {
                                         });
                                         return resp && resp.crossOrigin;
                                     } catch (e) {
+                                        console.warn('CORS check failed', e);
                                         return false;
                                     }
                                 },
@@ -244,16 +245,36 @@ function audioRecorderFirefox() {
                                 // We check if we've already set up the passthrough to avoid redundant work.
                                 if (!elemForRecording._auddPassthroughActive) {
                                     console.log("Setting up audio passthrough for element:", elemForRecording);
-                                    const passthroughCtx = new AudioContext();
+                                    let passthroughCtx = new AudioContext();
                                     let source;
                                     try {
                                         // Attempt to create a source. This is where CORS errors occur.
                                         source = passthroughCtx.createMediaElementSource(elemForRecording);
                                     } catch(err) {
                                         if (err.name === 'SecurityError') {
-                                            await REC._reloadMediaForCors(elemForRecording);
-                                            source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                            try {
+                                                await REC._reloadMediaForCors(elemForRecording);
+                                                source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                            } catch(inner) {
+                                                console.warn('Reload after CORS failure did not help, trying offscreen clone');
+                                            }
                                         } else { throw err; }
+                                    }
+                                    if (!source) {
+                                        try {
+                                            elemForRecording = await REC.createOffscreenClone(m_elm);
+                                            passthroughCtx = new AudioContext();
+                                            source = passthroughCtx.createMediaElementSource(elemForRecording);
+                                        } catch (cloneErr) {
+                                            chrome.runtime.sendMessage({
+                                                cmd: "offscreen_capture",
+                                                src: m_elm.currentSrc,
+                                                currentTime: m_elm.currentTime,
+                                                duration: rec_time_ms
+                                            });
+                                            isRecording = false;
+                                            return Promise.reject("cors_offscreen");
+                                        }
                                     }
                                     source.connect(passthroughCtx.destination);
                                     elemForRecording._auddPassthroughActive = true;
