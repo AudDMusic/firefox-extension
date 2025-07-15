@@ -427,7 +427,8 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 sendResponse({ blobUrl: existing });
                 return true;
             }
-            fetch(request.src)
+            const fetchUrl = request.fetchUrl || request.src;
+            fetch(fetchUrl)
                 .then(resp => resp.blob())
                 .then(blob => {
                     const url = URL.createObjectURL(blob);
@@ -450,13 +451,19 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
                 .then(resp => {
                     const original = new URL(request.src).origin;
                     const finalOrigin = new URL(resp.url).origin;
-                    sendResponse({ crossOrigin: finalOrigin !== original });
+                    const statusOk = resp.status >= 200 && resp.status < 300;
+                    // Provide the final URL so the content script can fetch directly if needed.
+                    sendResponse({
+                        crossOrigin: !statusOk || finalOrigin !== original,
+                        finalUrl: resp.url
+                    });
                 })
-                .catch(() => sendResponse({ crossOrigin: false }));
+                .catch(() => sendResponse({ crossOrigin: true, finalUrl: null }));
             return true;
         }
         case "offscreen_capture":
-            offscreenCapture(request.src, request.currentTime, request.duration);
+            const offscreenUrl = request.fetchUrl || request.src;
+            offscreenCapture(offscreenUrl, request.currentTime, request.duration);
             break;
         case "popup_error_relay":
 			request.cmd = "popup_error";

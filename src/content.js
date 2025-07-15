@@ -130,31 +130,33 @@ function audioRecorderFirefox() {
                                 async isCorsSource(m_elm) {
                                     try {
                                         const src = m_elm.currentSrc || m_elm.src;
-                                        if (!src) return false;
+                                        if (!src) return { crossOrigin: false, finalUrl: null };
                                         const elemOrigin = new URL(src, document.baseURI).origin;
                                         if (elemOrigin !== document.location.origin) {
-                                            return true;
+                                            return { crossOrigin: true, finalUrl: src };
                                         }
                                         const resp = await chrome.runtime.sendMessage({
                                             cmd: 'check_cors_redirect',
                                             src
                                         });
-                                        return resp && resp.crossOrigin;
+                                        return resp || { crossOrigin: false, finalUrl: null };
                                     } catch (e) {
-                                        return false;
+                                        return { crossOrigin: false, finalUrl: null };
                                     }
                                 },
 
-                                async createOffscreenClone(elem) {
+                                async createOffscreenClone(elem, srcOverride = null) {
                                     if (offscreenClones.has(elem)) {
                                         return offscreenClones.get(elem);
                                     }
                                     const resp = await chrome.runtime.sendMessage({
                                         cmd: 'create_offscreen_element',
-                                        src: elem.currentSrc
+                                        src: elem.currentSrc,
+                                        fetchUrl: srcOverride
                                     });
                                     const clone = new Audio();
-                                    clone.src = (resp && resp.blobUrl) ? resp.blobUrl : elem.currentSrc;
+                                    const srcForClone = srcOverride || elem.currentSrc;
+                                    clone.src = (resp && resp.blobUrl) ? resp.blobUrl : srcForClone;
                                     clone.crossOrigin = 'anonymous';
                                     clone.volume = 0.02;
                                     clone.preload = 'auto';
@@ -224,13 +226,15 @@ function audioRecorderFirefox() {
                                                 for (const m_elm of mediaElements) {
                                                         try {
                                 let elemForRecording = m_elm;
-                                if (await REC.isCorsSource(m_elm)) {
+                                const corsInfo = await REC.isCorsSource(m_elm);
+                                if (corsInfo.crossOrigin) {
                                     try {
-                                        elemForRecording = await REC.createOffscreenClone(m_elm);
+                                        elemForRecording = await REC.createOffscreenClone(m_elm, corsInfo.finalUrl);
                                     } catch (cloneErr) {
                                         chrome.runtime.sendMessage({
                                             cmd: "offscreen_capture",
                                             src: m_elm.currentSrc,
+                                            fetchUrl: corsInfo.finalUrl,
                                             currentTime: m_elm.currentTime,
                                             duration: rec_time_ms
                                         });
