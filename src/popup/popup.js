@@ -328,8 +328,8 @@ function init() {
                 });
             });
             $('#consent_reject').on('click', function() {
-                if (chrome.management && chrome.management.uninstallSelf) {
-                    chrome.management.uninstallSelf();
+                if (chrome.management && chrome.management.uninstallSelf) {chrome.management.uninstallSelf({showConfirmDialog: true, dialogMessage: 
+                    "You can click on Uninstall to uninstall extension. Alternatively, you can decide to keep the extension. You would need to consent to our privacy policy to use it."});
                 }
             });
         }
