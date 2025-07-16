@@ -313,7 +313,8 @@ function init() {
 $(window).on('load', function() {
     var date = new Date();
     var year = date.getFullYear();
-    $('#copyright_year').html(year);
+    var yearElem = document.getElementById('copyright_year');
+    if(yearElem) { yearElem.textContent = year; }
     var gradient = new Gradient();
     gradient.initGradient("#canvas");
 
@@ -340,6 +341,71 @@ function applyLocalizedMessage(element, messageHtml) {
         element.removeChild(element.firstChild);
     }
     element.appendChild(fragment);
+}
+
+function clearElement(element) {
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function(s) {
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]);
+    });
+}
+
+function renderTemplate(templateStr, data) {
+    function renderSection(tmpl, ctx) {
+        return tmpl
+            .replace(/{{#(\w+)}}([\s\S]*?){{\/\1}}/g, function(_, key, inner) {
+                var val = ctx[key];
+                if (Array.isArray(val)) {
+                    return val.map(function(item){return renderSection(inner, item);}).join('');
+                }
+                if (val) {
+                    return renderSection(inner, ctx);
+                }
+                return '';
+            })
+            .replace(/{{\^(\w+)}}([\s\S]*?){{\/\1}}/g, function(_, key, inner) {
+                var val = ctx[key];
+                if (!val || (Array.isArray(val) && val.length === 0)) {
+                    return renderSection(inner, ctx);
+                }
+                return '';
+            })
+            .replace(/{{(\w+)}}/g, function(_, key) {
+                var val = ctx[key];
+                return val === undefined ? '' : escapeHtml(val);
+            });
+    }
+    var html = renderSection(templateStr, data);
+    var parser = new DOMParser();
+    var doc = parser.parseFromString('<div>' + html + '</div>', 'text/html');
+    var fragment = document.createDocumentFragment();
+    Array.from(doc.body.firstChild.childNodes).forEach(function(node) {
+        fragment.appendChild(node);
+    });
+    return fragment;
+}
+
+function replaceContent(element, fragment) {
+    clearElement(element);
+    element.appendChild(fragment);
+}
+
+function setLyricsBody(text) {
+    var container = document.getElementById('lyrics_body');
+    if(!container) return;
+    clearElement(container);
+    var lines = text.replace(/(\])/g, ']\n').split(/\r?\n/);
+    lines.forEach(function(line, idx){
+        container.appendChild(document.createTextNode(line));
+        if(idx < lines.length - 1) {
+            container.appendChild(document.createElement('br'));
+        }
+    });
 }
 
 function MediaRecorderWrapper(user_media_stream) {
@@ -748,17 +814,17 @@ function copyTextToClipboard(text) {
 }
 
 function PopupView() {
-	var running = false;
-	
+        var running = false;
+
     var audio_band = 1;
 
     var audio_bands_func;
 
-    var _music_info_template_str = $("#music_info_template").html();
-    var _no_results_template_str = $("#no_results_template").html();
-    var _show_error_template_str = $("#show_error_template").html();
+    var _music_info_template_str = document.getElementById("music_info_template").textContent;
+    var _no_results_template_str = document.getElementById("no_results_template").textContent;
+    var _show_error_template_str = document.getElementById("show_error_template").textContent;
 
-    var _list_template_str = $("#list_template").html();
+    var _list_template_str = document.getElementById("list_template").textContent;
 
     var screens = ['history', 'lyrics', 'initial', 'settings']
 	
@@ -791,42 +857,43 @@ function PopupView() {
 	activateScreenButtons();
 
     var show_message = function(msg, level) {
-		if(level == 2) {
-			running = false;
-			clearInterval(audio_bands_func);
-			$("#main_footer").show();
-			console.log(msg);
-			var music_info_html = Mustache.render(_show_error_template_str, {"history": recognitionHistory, "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText")});
-			$('#initial_screen_info').html(music_info_html).ready(function(){
-				loadCoverImages();
-			});
-			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found")
-			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").addClass("show-error");
-			activateScreenButtons();
-			msg = "<p>" + msg + "</p>";
-			$("#footer_msg").html(msg).ready(function(){
-				var padding_for_h2 = 35;
-				var padding_top_for_history = parseInt($("#history-results").css("padding-top").replace("px", ""));
-				var logo_height = $("#logo").height();
-				var footer_height = $("#main_footer").height();
-				var bottom_content_height = $("body").height() - footer_height - logo_height;
-				var history_height = bottom_content_height - padding_for_h2;
-				$("#bottom-content").css("height", bottom_content_height);
-				$("#history-tracks").css("padding-top", padding_for_h2);
-				$("#history-tracks").css("height", history_height);
-				$("#history-results").css("height", history_height - padding_top_for_history);
-				$(".history-shadow").css("bottom", footer_height);
-				$(".upper-shadow").css("top", logo_height + padding_for_h2);
-			});
-			return;
-		}
+        if(level == 2) {
+                running = false;
+                clearInterval(audio_bands_func);
+                $("#main_footer").show();
+                console.log(msg);
+                var fragment = renderTemplate(_show_error_template_str, {history: recognitionHistory, identifiedEarlierText: chrome.i18n.getMessage("identifiedEarlierText")});
+                replaceContent(document.getElementById('initial_screen_info'), fragment);
+                loadCoverImages();
+                $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found")
+                $("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").addClass("show-error");
+                activateScreenButtons();
+                var footer = document.getElementById('footer_msg');
+                clearElement(footer);
+                var p = document.createElement('p');
+                p.textContent = msg;
+                footer.appendChild(p);
+                var padding_for_h2 = 35;
+                var padding_top_for_history = parseInt($("#history-results").css("padding-top").replace("px", ""));
+                var logo_height = $("#logo").height();
+                var footer_height = $("#main_footer").height();
+                var bottom_content_height = $("body").height() - footer_height - logo_height;
+                var history_height = bottom_content_height - padding_for_h2;
+                $("#bottom-content").css("height", bottom_content_height);
+                $("#history-tracks").css("padding-top", padding_for_h2);
+                $("#history-tracks").css("height", history_height);
+                $("#history-results").css("height", history_height - padding_top_for_history);
+                $(".history-shadow").css("bottom", footer_height);
+                $(".upper-shadow").css("top", logo_height + padding_for_h2);
+                return;
+        }
         var show_class = 'success';
         if (level == -1) {
             show_class = 'error';
         }
 
         $("#main_header").hide();
-        $("#main_header h1").html(msg);
+        document.querySelector("#main_header h1").textContent = msg;
         $("#main_header").addClass(show_class);
         $("#main_header").slideDown(msg);
 		setTimeout(() => $("#main_header").removeClass(show_class), 2000);
@@ -847,11 +914,11 @@ function PopupView() {
 		if(!song.song_link) {
 			song.song_link = "https://www.google.com/search?q="+encodeURIComponent(song.artist + " " + song.title);
 		}
-        var music_info_html = Mustache.render(_music_info_template_str, song);
-        $('#initial_screen_info').html(music_info_html);
-		recognitionHistory.unshift(song);
-		var history_html = Mustache.render(_list_template_str, {"history": recognitionHistory});
-        $('#history-on-result').html(history_html).ready(function(){
+        var fragment = renderTemplate(_music_info_template_str, song);
+        replaceContent(document.getElementById('initial_screen_info'), fragment);
+                recognitionHistory.unshift(song);
+                var history_fragment = renderTemplate(_list_template_str, {history: recognitionHistory});
+        replaceContent(document.getElementById('history-on-result'), history_fragment);
             loadCoverImages();
             var padding_for_buttons = 88;
             var patreon_height = 0; // Height of Patreon banner + margins
@@ -887,24 +954,22 @@ function PopupView() {
             if(_info.api_token) {
                 $('.patreon-suggestion').hide();
             }
-		});
         if(song.lyrics) {
-            $("#lyrics_body").html(song.lyrics.lyrics.replace(/(?:\r\n|\r|\n)/g, '<br>').replace(/(\])/g, ']<br>'));
+            setLyricsBody(song.lyrics.lyrics);
         }
-		activateScreenButtons();
+                activateScreenButtons();
     };
 
     var show_no_result = function() {
 		running = false;
         clearInterval(audio_bands_func);
 		console.log(recognitionHistory);
-        var music_info_html = Mustache.render(_no_results_template_str, {"history": recognitionHistory, 
-			"tryAgainText": chrome.i18n.getMessage("tryAgainText"), "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText"), 
-			"noMatchesText": chrome.i18n.getMessage("noMatchesText")});
-        $('#initial_screen_info').html(music_info_html).ready(function(){
-			loadCoverImages();
-		});
-		activateScreenButtons();
+        var fragment = renderTemplate(_no_results_template_str, {history: recognitionHistory,
+                        tryAgainText: chrome.i18n.getMessage("tryAgainText"), identifiedEarlierText: chrome.i18n.getMessage("identifiedEarlierText"),
+                        noMatchesText: chrome.i18n.getMessage("noMatchesText")});
+        replaceContent(document.getElementById('initial_screen_info'), fragment);
+                        loadCoverImages();
+                activateScreenButtons();
     };
 	
 	var loadCoverImages = function() {
@@ -918,7 +983,7 @@ function PopupView() {
 
     var refresh = function(data) {
         if (typeof data !== "undefined") {
-            $("#history_screen_info").html("");
+            $("#history_screen_info").empty();
             hide_confirm_buttons();
 
             data.forEach(function(item) {
@@ -938,12 +1003,11 @@ function PopupView() {
             })
 			
 			recognitionHistory = data;
-			var tmp_html = Mustache.render(_list_template_str, {"history": data});
-            $("#history_screen_info").html(tmp_html).ready(function(){
-				loadCoverImages();
-			});
+                        var tmp_fragment = renderTemplate(_list_template_str, {history: data});
+            replaceContent(document.getElementById('history_screen_info'), tmp_fragment);
+                                loadCoverImages();
             $("#history_screen_info").slideDown("slow");
-			activateScreenButtons();
+                        activateScreenButtons();
         }
 
         $("a").each(function() {
@@ -974,7 +1038,7 @@ function PopupView() {
             $(".audio-band." + audio_band % 3).addClass("active");
             audio_band++;
         }, 500);
-		$('#initial_screen_info').html("");
+                $('#initial_screen_info').empty();
     };
 
     var stop = function() {
@@ -992,11 +1056,11 @@ function PopupView() {
 
     var reset = function() {
         $("#search_result").fadeOut();
-        $('#search_result').html("");
+        $('#search_result').empty();
     };
 
     var clear_history = function() {
-        $('#search_result').html("");
+        $('#search_result').empty();
     };
 	
     return {
