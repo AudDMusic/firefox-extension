@@ -272,45 +272,68 @@ function init() {
 	
 	
     var popup_view = PopupView();
-    var recognizer_controller = RecognizerController(popup_view);
-	
-    $('.logo[screen="initial"]').on('click', function() {
-        recognizer_controller.start();
-    });
-    $('.inactive_img.settings').on('click', function() {
-        openScreen("initial");
-        recognizer_controller.start();
-    });
-    $('.up_button[screen="lyrics"]').on('click', function() {
-        openScreen("initial");
-    });
+    var recognizer_controller = null;
+
+    function proceed() {
+        recognizer_controller = RecognizerController(popup_view);
+
+        $('.logo[screen="initial"]').on('click', function() {
+            recognizer_controller.start();
+        });
+        $('.inactive_img.settings').on('click', function() {
+            openScreen("initial");
+            recognizer_controller.start();
+        });
+        $('.up_button[screen="lyrics"]').on('click', function() {
+            openScreen("initial");
+        });
 
 
-    $('#clean-history').on('click', function() {
-        $('#clean-history-confirm').show();
-        $('#clean-history').hide();
-        $('#confirmQuestion').text(chrome.i18n.getMessage("confirmQuestion"));
-        $('#clean-history-yes').text(chrome.i18n.getMessage("yes"));
-        $('#clean-history-no').text(chrome.i18n.getMessage("no"));
-    });
+        $('#clean-history').on('click', function() {
+            $('#clean-history-confirm').show();
+            $('#clean-history').hide();
+            $('#confirmQuestion').text(chrome.i18n.getMessage("confirmQuestion"));
+            $('#clean-history-yes').text(chrome.i18n.getMessage("yes"));
+            $('#clean-history-no').text(chrome.i18n.getMessage("no"));
+        });
 
-    $('#clean-history-yes').on('click', function() {
-        recognizer_controller.clear_history();
-        openScreen("initial");
-        chrome.runtime.sendMessage({cmd: "popup_message_relay", result: {"text": "The history is cleared. Close and open the extension to see the change."}});
-        popup_view.hide_confirm_buttons();
-    });
+        $('#clean-history-yes').on('click', function() {
+            recognizer_controller.clear_history();
+            openScreen("initial");
+            chrome.runtime.sendMessage({cmd: "popup_message_relay", result: {"text": "The history is cleared. Close and open the extension to see the change."}});
+            popup_view.hide_confirm_buttons();
+        });
 
-    $('#clean-history-no').on('click', function() {
-        popup_view.hide_confirm_buttons();
-    });
-    chrome.runtime.sendMessage({cmd: "get_token"});
-	$('#save_settings').on('click', function() {
-		openScreen("initial");
-		chrome.runtime.sendMessage({cmd: "change_settings", api_token: $('#token_input').val(), record_length: $('#recordingLength').val()*100});
-	})
+        $('#clean-history-no').on('click', function() {
+            popup_view.hide_confirm_buttons();
+        });
+        chrome.runtime.sendMessage({cmd: "get_token"});
+        $('#save_settings').on('click', function() {
+            openScreen("initial");
+            chrome.runtime.sendMessage({cmd: "change_settings", api_token: $('#token_input').val(), record_length: $('#recordingLength').val()*100});
+        });
 
-    recognizer_controller.init();
+        recognizer_controller.init();
+    }
+
+    chrome.storage.local.get('consent', function(data) {
+        if (data.consent) {
+            proceed();
+        } else {
+            openScreen('consent');
+            $('#consent_accept').on('click', function() {
+                chrome.storage.local.set({consent: true}, function() {
+                    proceed();
+                    openScreen('initial');
+                });
+            });
+            $('#consent_reject').on('click', function() {
+                if (chrome.management && chrome.management.uninstallSelf) {chrome.management.uninstallSelf({showConfirmDialog: true, dialogMessage: 
+                    "You can click on Uninstall to uninstall extension. Alternatively, you can decide to keep the extension. You would need to consent to our privacy policy to use it."});
+                }
+            });
+        }
+    });
 }
 
 $(window).on('load', function() {
