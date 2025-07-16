@@ -69,6 +69,9 @@ function post_request(audio_buffer) {
 	post_data.append('file', audio_buffer);
 	//post_data.append('browser_version', browser_version);
 	//post_data.append('market', chrome.i18n.getMessage("countryCode"));
+
+	
+	// version and app_id are statically defined in the manifest
 	post_data.append('version', manifest.version);
 	post_data.append("app_id", app_id);
 	post_data.append('return', 'lyrics');
