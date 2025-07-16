@@ -322,11 +322,25 @@ $(window).on('load', function() {
     var objects = document.getElementsByTagName('*'), i;
     for(i = 0; i < objects.length; i++) {
       if (objects[i].dataset && objects[i].dataset.message) {
-        objects[i].textContent = chrome.i18n.getMessage(objects[i].dataset.message);
+        // objects[i].innerHTML = chrome.i18n.getMessage(objects[i].dataset.message);
+        var msg = chrome.i18n.getMessage(objects[i].dataset.message);
+        applyLocalizedMessage(objects[i], msg);
       }
     }
 });
 
+function applyLocalizedMessage(element, messageHtml) {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString('<div>' + messageHtml + '</div>', 'text/html');
+    var fragment = document.createDocumentFragment();
+    Array.from(doc.body.firstChild.childNodes).forEach(function(node) {
+        fragment.appendChild(node);
+    });
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+    element.appendChild(fragment);
+}
 
 function MediaRecorderWrapper(user_media_stream) {
 
