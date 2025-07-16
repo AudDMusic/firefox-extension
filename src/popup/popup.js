@@ -322,7 +322,7 @@ $(window).on('load', function() {
     var objects = document.getElementsByTagName('*'), i;
     for(i = 0; i < objects.length; i++) {
       if (objects[i].dataset && objects[i].dataset.message) {
-        objects[i].innerHTML = chrome.i18n.getMessage(objects[i].dataset.message);
+        objects[i].textContent = chrome.i18n.getMessage(objects[i].dataset.message);
       }
     }
 });
@@ -750,7 +750,7 @@ function PopupView() {
 	var recordingLengthSlider = document.getElementById("recordingLength");
 	var recordingLengthTextDiv = document.getElementById("recordingLengthText");
 	recordingLengthSlider.oninput = function() {
-	  recordingLengthTextDiv.innerHTML = this.value / 10 + "s";
+	  recordingLengthTextDiv.textContent = this.value / 10 + "s";
 	}
 
     var show_confirm_buttons = function() {
