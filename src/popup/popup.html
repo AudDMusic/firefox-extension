@@ -79,7 +79,7 @@
     </div>
 </body>
 
-<script id="music_info_template" type="text/x-handlebars-template">
+<template id="music_info_template">
     
 	<div class="cover-content {{^SquereCover}}not_squere{{/SquereCover}}">
 		<img id="initial_screen_album" src={{albumImage}} class="found" />
@@ -122,8 +122,8 @@
 			<div class="history-shadow upper-shadow"></div>
 		</div>
 	</div>
-</script>
-<script id="no_results_template" type="text/x-handlebars-template">
+</template>
+<template id="no_results_template">
 	<div class="cover-content-no-results">
 		<div class="no-results-header"><div></div>
 			<h1 class="no-results-text">{{noMatchesText}}</h1>
@@ -151,8 +151,8 @@
 		<div class="history-shadow no-results"></div>
 		<div class="history-shadow no-results upper-shadow"></div>
 	</div>
-</script>
-<script id="show_error_template" type="text/x-handlebars-template">
+</template>
+<template id="show_error_template">
 	<div class="cover-content-show-error">
 	</div>
 	<div class="bottom-content show-error" id="bottom-content">
@@ -176,9 +176,9 @@
 		<div class="history-shadow"></div>
 		<div class="history-shadow upper-shadow"></div>
 	</div>
-</script>
+</template>
 
-<script id="list_template" type="text/x-handlebars-template">
+<template id="list_template">
 	<div id="history-results">
 	{{#history}}
 	<a href="{{song_link}}" target="_blank"> <div class="history-track">
@@ -189,7 +189,7 @@
 	</div></div></a>
 	{{/history}}
 	</div>
-</script>
+</template>
 <!--<script id="list_template" type="text/x-handlebars-template">
     {{#history}}
     <li>
@@ -215,7 +215,6 @@
 </script>-->
 
 <script type="text/javascript" src="vendor/jquery.min.js"></script>
-<script type="text/javascript" src="vendor/mustache.min.js"></script>
 <script type="text/javascript" src="popup.js"></script>
 <script type="text/javascript" src="canvas.js"></script>
 </html>

@@ -313,7 +313,8 @@ function init() {
 $(window).on('load', function() {
     var date = new Date();
     var year = date.getFullYear();
-    $('#copyright_year').html(year);
+    var yrEl = document.getElementById('copyright_year');
+    if (yrEl) yrEl.textContent = year;
     var gradient = new Gradient();
     gradient.initGradient("#canvas");
 
@@ -340,6 +341,60 @@ function applyLocalizedMessage(element, messageHtml) {
         element.removeChild(element.firstChild);
     }
     element.appendChild(fragment);
+}
+
+function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, function(c) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[c];
+    });
+}
+
+function renderTemplate(template, data) {
+    return template
+        .replace(/{{#(\w+)}}([\s\S]*?){{\/\1}}/g, function(_, key, content) {
+            var val = data[key];
+            if (Array.isArray(val)) {
+                return val.map(function(item) {return renderTemplate(content, item);}).join('');
+            } else if (val) {
+                return renderTemplate(content, data);
+            }
+            return '';
+        })
+        .replace(/{{\^(\w+)}}([\s\S]*?){{\/\1}}/g, function(_, key, content) {
+            var val = data[key];
+            if (!val || (Array.isArray(val) && val.length === 0)) {
+                return renderTemplate(content, data);
+            }
+            return '';
+        })
+        .replace(/{{(\w+)}}/g, function(_, key) {
+            var val = data[key];
+            if (val === undefined || val === null) return '';
+            return escapeHtml(String(val));
+        });
+}
+
+function createFragment(html) {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString('<div>' + html + '</div>', 'text/html');
+    var frag = document.createDocumentFragment();
+    Array.from(doc.body.firstChild.childNodes).forEach(function(node) {
+        frag.appendChild(node);
+    });
+    return frag;
+}
+
+function setContent(element, html) {
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+    element.appendChild(createFragment(html));
 }
 
 function MediaRecorderWrapper(user_media_stream) {
@@ -754,11 +809,11 @@ function PopupView() {
 
     var audio_bands_func;
 
-    var _music_info_template_str = $("#music_info_template").html();
-    var _no_results_template_str = $("#no_results_template").html();
-    var _show_error_template_str = $("#show_error_template").html();
+    var _music_info_template_str = document.getElementById("music_info_template").innerHTML;
+    var _no_results_template_str = document.getElementById("no_results_template").innerHTML;
+    var _show_error_template_str = document.getElementById("show_error_template").innerHTML;
 
-    var _list_template_str = $("#list_template").html();
+    var _list_template_str = document.getElementById("list_template").innerHTML;
 
     var screens = ['history', 'lyrics', 'initial', 'settings']
 	
@@ -796,28 +851,28 @@ function PopupView() {
 			clearInterval(audio_bands_func);
 			$("#main_footer").show();
 			console.log(msg);
-			var music_info_html = Mustache.render(_show_error_template_str, {"history": recognitionHistory, "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText")});
-			$('#initial_screen_info').html(music_info_html).ready(function(){
-				loadCoverImages();
-			});
+                        var music_info_html = renderTemplate(_show_error_template_str, {"history": recognitionHistory, "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText")});
+                        setContent(document.getElementById('initial_screen_info'), music_info_html);
+                        loadCoverImages();
 			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").removeClass("found")
 			$("#initial_screen_search_img, #initial_screen_search_img2, #logo, .inactive_img, .audio-bands, .mic-eclipse").addClass("show-error");
 			activateScreenButtons();
-			msg = "<p>" + msg + "</p>";
-			$("#footer_msg").html(msg).ready(function(){
-				var padding_for_h2 = 35;
-				var padding_top_for_history = parseInt($("#history-results").css("padding-top").replace("px", ""));
-				var logo_height = $("#logo").height();
-				var footer_height = $("#main_footer").height();
-				var bottom_content_height = $("body").height() - footer_height - logo_height;
-				var history_height = bottom_content_height - padding_for_h2;
-				$("#bottom-content").css("height", bottom_content_height);
-				$("#history-tracks").css("padding-top", padding_for_h2);
-				$("#history-tracks").css("height", history_height);
-				$("#history-results").css("height", history_height - padding_top_for_history);
-				$(".history-shadow").css("bottom", footer_height);
-				$(".upper-shadow").css("top", logo_height + padding_for_h2);
-			});
+                        msg = "<p>" + msg + "</p>";
+                        setContent(document.getElementById('footer_msg'), msg);
+                        (function(){
+                                var padding_for_h2 = 35;
+                                var padding_top_for_history = parseInt($("#history-results").css("padding-top").replace("px", ""));
+                                var logo_height = $("#logo").height();
+                                var footer_height = $("#main_footer").height();
+                                var bottom_content_height = $("body").height() - footer_height - logo_height;
+                                var history_height = bottom_content_height - padding_for_h2;
+                                $("#bottom-content").css("height", bottom_content_height);
+                                $("#history-tracks").css("padding-top", padding_for_h2);
+                                $("#history-tracks").css("height", history_height);
+                                $("#history-results").css("height", history_height - padding_top_for_history);
+                                $(".history-shadow").css("bottom", footer_height);
+                                $(".upper-shadow").css("top", logo_height + padding_for_h2);
+                        })();
 			return;
 		}
         var show_class = 'success';
@@ -826,7 +881,7 @@ function PopupView() {
         }
 
         $("#main_header").hide();
-        $("#main_header h1").html(msg);
+        document.querySelector("#main_header h1").textContent = msg;
         $("#main_header").addClass(show_class);
         $("#main_header").slideDown(msg);
 		setTimeout(() => $("#main_header").removeClass(show_class), 2000);
@@ -847,11 +902,12 @@ function PopupView() {
 		if(!song.song_link) {
 			song.song_link = "https://www.google.com/search?q="+encodeURIComponent(song.artist + " " + song.title);
 		}
-        var music_info_html = Mustache.render(_music_info_template_str, song);
-        $('#initial_screen_info').html(music_info_html);
+        var music_info_html = renderTemplate(_music_info_template_str, song);
+        setContent(document.getElementById('initial_screen_info'), music_info_html);
 		recognitionHistory.unshift(song);
-		var history_html = Mustache.render(_list_template_str, {"history": recognitionHistory});
-        $('#history-on-result').html(history_html).ready(function(){
+                var history_html = renderTemplate(_list_template_str, {"history": recognitionHistory});
+        setContent(document.getElementById('history-on-result'), history_html);
+        (function(){
             loadCoverImages();
             var padding_for_buttons = 88;
             var patreon_height = 0; // Height of Patreon banner + margins
@@ -862,11 +918,11 @@ function PopupView() {
             $("#history-results").css("height", history_height);
             
 			
-			$("[share-url]").on("click", function() {
-				chrome.windows.create({url: $(this).attr("share-url")});
+                        $("[share-url]").on("click", function() {
+                                chrome.windows.create({url: $(this).attr("share-url")});
             });
-			$("[copy-text]").on("click", function() {
-				copyTextToClipboard(decodeURIComponent($(this).attr("copy-text")));
+                        $("[copy-text]").on("click", function() {
+                                copyTextToClipboard(decodeURIComponent($(this).attr("copy-text")));
             });
 			setTimeout(function(){
 				var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
@@ -875,7 +931,7 @@ function PopupView() {
 			setTimeout(function(){
 				var share_left = $(".share").offset().left + $(".share").width()/2 - $(".sub_menu").width() / 2;
 				$(".sub_menu").css("left", share_left);
-			}, 1000);
+                        }, 1000);
             $('#patreon-link').on('click', function() {
                 chrome.tabs.create({url: 'https://www.patreon.com/audd'});
             });
@@ -889,7 +945,8 @@ function PopupView() {
             }
 		});
         if(song.lyrics) {
-            $("#lyrics_body").html(song.lyrics.lyrics.replace(/(?:\r\n|\r|\n)/g, '<br>').replace(/(\])/g, ']<br>'));
+            var lyrics_html = song.lyrics.lyrics.replace(/(?:\r\n|\r|\n)/g, '<br>').replace(/(\])/g, ']<br>');
+            setContent(document.getElementById('lyrics_body'), lyrics_html);
         }
 		activateScreenButtons();
     };
@@ -898,13 +955,12 @@ function PopupView() {
 		running = false;
         clearInterval(audio_bands_func);
 		console.log(recognitionHistory);
-        var music_info_html = Mustache.render(_no_results_template_str, {"history": recognitionHistory, 
-			"tryAgainText": chrome.i18n.getMessage("tryAgainText"), "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText"), 
-			"noMatchesText": chrome.i18n.getMessage("noMatchesText")});
-        $('#initial_screen_info').html(music_info_html).ready(function(){
-			loadCoverImages();
-		});
-		activateScreenButtons();
+        var music_info_html = renderTemplate(_no_results_template_str, {"history": recognitionHistory,
+                        "tryAgainText": chrome.i18n.getMessage("tryAgainText"), "identifiedEarlierText": chrome.i18n.getMessage("identifiedEarlierText"),
+                        "noMatchesText": chrome.i18n.getMessage("noMatchesText")});
+        setContent(document.getElementById('initial_screen_info'), music_info_html);
+        loadCoverImages();
+        activateScreenButtons();
     };
 	
 	var loadCoverImages = function() {
@@ -918,7 +974,7 @@ function PopupView() {
 
     var refresh = function(data) {
         if (typeof data !== "undefined") {
-            $("#history_screen_info").html("");
+            setContent(document.getElementById('history_screen_info'), '');
             hide_confirm_buttons();
 
             data.forEach(function(item) {
@@ -938,10 +994,9 @@ function PopupView() {
             })
 			
 			recognitionHistory = data;
-			var tmp_html = Mustache.render(_list_template_str, {"history": data});
-            $("#history_screen_info").html(tmp_html).ready(function(){
-				loadCoverImages();
-			});
+                        var tmp_html = renderTemplate(_list_template_str, {"history": data});
+            setContent(document.getElementById('history_screen_info'), tmp_html);
+            loadCoverImages();
             $("#history_screen_info").slideDown("slow");
 			activateScreenButtons();
         }
@@ -974,7 +1029,7 @@ function PopupView() {
             $(".audio-band." + audio_band % 3).addClass("active");
             audio_band++;
         }, 500);
-		$('#initial_screen_info').html("");
+                setContent(document.getElementById('initial_screen_info'), '');
     };
 
     var stop = function() {
@@ -992,11 +1047,11 @@ function PopupView() {
 
     var reset = function() {
         $("#search_result").fadeOut();
-        $('#search_result').html("");
+        setContent(document.getElementById('search_result'), '');
     };
 
     var clear_history = function() {
-        $('#search_result').html("");
+        setContent(document.getElementById('search_result'), '');
     };
 	
     return {
