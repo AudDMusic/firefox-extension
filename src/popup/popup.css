@@ -50,19 +50,33 @@ body {
     z-index: 1;
 }
 
+#consent_screen .consent-content {
+    max-width: 270px;
+    margin: 0 auto;
+}
+
+#consent_screen a {
+    color: #315EFF;
+}
+
 #consent_screen h1 {
     font-size: 18px;
-    margin-top: 0;
+    margin: 0 0 10px;
+    text-align: center;
 }
 
 #consent_screen p {
     font-size: 14px;
     line-height: 1.4;
+    margin: 0 0 10px;
 }
 
 #consent_screen .consent-buttons {
     margin-top: 15px;
     text-align: center;
+}
+#consent_screen button {
+    min-width: 100px;
 }
 
 /* HEADER/MESSAGES */

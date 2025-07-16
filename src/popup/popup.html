@@ -12,8 +12,8 @@
         <div id="main_content">
             <img class="up_button up_right_button" id="settings_button" show-on show-on-initial src="../../icons/Settings.svg" />
             <img class="up_button up_left_button" button-initial show-on show-on-lyrics show-on-settings src="../../icons/Arrow.svg" style="display:none;"/>
+            <canvas id="canvas"></canvas>
             <div id="initial_screen" class="screen">
-                <canvas id="canvas"></canvas>
                 <div class="audio-bands">
                     <img class="audio-band big 0" src="../../img/audio-band.png" />
                     <img class="audio-band med 1" src="../../img/audio-band.png" />
@@ -37,7 +37,7 @@
                     <p>When invoked, the extension records up to 12 seconds of audio that's playing on the current browser tab in order to submit it to AudD (music recognition API). The audio is transmitted to AudD servers for music identification. The audio is not stored after the music recognition is complete. AudD might store digital fingerprints of the audio for up to two weeks. The extension, together with the audio, will send its version, the tab title, and the tab URL to AudD. AudD does not share that data with third parties and uses it to prevent abuse of the music recognition API that it provides.</p>
                     <p><a href="https://addons.mozilla.org/en-US/firefox/addon/audd/privacy/" target="_blank">Privacy Policy</a></p>
                     <div class="consent-buttons">
-                        <button id="consent_accept" class="button button--primary">Accept</button>
+                        <button id="consent_accept" class="button button--outline button--primary">Accept</button>
                         <button id="consent_reject" class="button button--outline" style="margin-left:10px;">Reject &amp; Uninstall</button>
                     </div>
                 </div>
