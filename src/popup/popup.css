@@ -41,12 +41,18 @@ body {
 
 #consent_screen {
     padding: 15px;
-    color: white;
+    color: #333;
+    background: white;
     overflow-y: auto;
     height: 100%;
     width: 100%;
     position: absolute;
     z-index: 1;
+}
+
+#consent_screen h1 {
+    font-size: 18px;
+    margin-top: 0;
 }
 
 #consent_screen p {
