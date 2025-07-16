@@ -551,7 +551,7 @@ function AudioRecorder() {
 			chrome.tabs.sendMessage(_tab_id, {cmd: "to_firefox_start", data: record_time_ms});
 			return;
 		}
-		
+		/*
         _is_recording = true;
         chrome.tabCapture.capture({
             audio : true,
@@ -582,6 +582,7 @@ function AudioRecorder() {
 				chrome.runtime.sendMessage({cmd: "popup_error_relay", result: {"status": 2, "text": "start error: can not record audio."}});
             }
         });
+	*/
     };
 
     var stop = function() {
