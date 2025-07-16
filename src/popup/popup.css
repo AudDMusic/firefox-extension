@@ -48,6 +48,7 @@ body {
     width: 100%;
     position: absolute;
     z-index: 1;
+    text-align: justify;
 }
 
 #consent_screen .consent-content {
