@@ -39,6 +39,22 @@ body {
     display: none;
 }
 
+#consent_screen {
+    padding: 15px;
+    color: white;
+    overflow-y: auto;
+}
+
+#consent_screen p {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+#consent_screen .consent-buttons {
+    margin-top: 15px;
+    text-align: center;
+}
+
 /* HEADER/MESSAGES */
 
 #main_header {

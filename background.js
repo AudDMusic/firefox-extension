@@ -263,8 +263,10 @@ async function offscreenCapture(src, currentTime, duration) {
 
 
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
-	console.log(request);
-    switch (request.cmd) {
+        console.log(request);
+        chrome.storage.local.get('consent', function(data){
+            if(!data.consent) return;
+            switch (request.cmd) {
 		/*case "query-active-tab":
             chrome.tabs.query({active: true}, (tabs) => {
                 if (tabs.length > 0) {
@@ -463,9 +465,10 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":
-			request.cmd = "popup_message";
+                        request.cmd = "popup_message";
             chrome.runtime.sendMessage(request);
             break;
     }
 
+        });
 });
