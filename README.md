@@ -30,3 +30,7 @@ Watch the video below to see how it works:
 ## Current issues
 
 See the [issues](https://github.com/AudDMusic/firefox-extension/issues).
+
+## For Firefox add-on reviewers
+
+Please see Notes for Reviewers.
