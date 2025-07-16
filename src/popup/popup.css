@@ -43,6 +43,10 @@ body {
     padding: 15px;
     color: white;
     overflow-y: auto;
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    z-index: 1;
 }
 
 #consent_screen p {

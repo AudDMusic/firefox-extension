@@ -390,8 +390,4 @@ function audioRecorderFirefox() {
     return [];
 }
 
-chrome.storage.local.get('consent', function(data) {
-    if (data.consent) {
-        audioRecorderFirefox();
-    }
-});
+audioRecorderFirefox();
