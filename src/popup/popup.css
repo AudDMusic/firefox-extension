@@ -673,8 +673,8 @@ canvas#canvas {
  .history-cover {float: left; width: 55px; min-height: 1px; display: flex; align-items: center; height: 45px;}
  .history-cover img {border-radius: 5px;}
  .history-info {z-index: 10; padding-top: 2px;display: grid;}
- .history-artist {margin-bottom: 5px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12pt;}
- .history-title {font-family: 'Inter', sans-serif; font-weight: 400; font-size: 11pt; width: 300px;}
+ .history-title {margin-bottom: 5px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12pt;}
+ .history-artist {font-family: 'Inter', sans-serif; font-weight: 400; font-size: 11pt; width: 300px;}
 
 .no-results #history-tracks {
 	background: transparent;
