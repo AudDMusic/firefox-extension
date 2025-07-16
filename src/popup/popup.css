@@ -61,8 +61,8 @@ body {
 }
 
 #consent_screen h1 {
-    font-size: 18px;
-    margin: 0 0 10px;
+    font-size: 20px;
+    margin: 0 0 15px;
     text-align: center;
 }
 
@@ -77,7 +77,7 @@ body {
 }
 #consent_screen button {
     margin-top: 10px;
-    min-width: 100px;
+    /*min-width: 100px;*/
 }
 
 /* HEADER/MESSAGES */
