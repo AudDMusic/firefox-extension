@@ -51,8 +51,8 @@ body {
 }
 
 #consent_screen .consent-content {
-    max-width: 270px;
-    margin: 0 auto;
+    max-width: 260px;
+    margin: 0;
 }
 
 #consent_screen a {
@@ -66,16 +66,16 @@ body {
 }
 
 #consent_screen p {
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.4;
     margin: 0 0 10px;
 }
 
 #consent_screen .consent-buttons {
-    margin-top: 15px;
     text-align: center;
 }
 #consent_screen button {
+    margin-top: 10px;
     min-width: 100px;
 }
 
@@ -1318,9 +1318,9 @@ canvas#canvas {
 .button.button--secondary {
     color: var(--ifm-color-gray-100);
 }
-.button.button--secondary:not(.button--active):not(:hover):not(:focus):not(.focus-visible) {
+/*.button.button--secondary:not(.button--active):not(:hover):not(:focus):not(.focus-visible) {
     color: var(--ifm-color-gray-900);
-}
+}*/
 
 .bottom-content {
     position: relative;  
