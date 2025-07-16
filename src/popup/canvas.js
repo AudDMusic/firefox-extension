@@ -1,11 +1,11 @@
 // This code is not minified. It creates a pretty wave-like background animation in a canvas and isn't doing anything else and isn't talking to anything else.
 function normalizeColor(hexCode) {
     return [(hexCode >> 16 & 255) / 255, (hexCode >> 8 & 255) / 255, (255 & hexCode) / 255]
-} ["SCREEN", "LINEAR_LIGHT"].reduce((hexCode, t, n) => Object.assign(hexCode, {
-    [t]: n
+} ["SCREEN", "LINEAR_LIGHT"].reduce((hexCode, blendMode, index) => Object.assign(hexCode, {
+    [blendMode]: index
 }), {});
 
-function e(object, propertyName, val) {
+function defineProp(object, propertyName, val) {
     return propertyName in object ? Object.defineProperty(object, propertyName, {
         value: val,
         enumerable: !0,
@@ -218,14 +218,14 @@ class MiniGl {
             })
         }
     }
-    setSize(e = 640, t = 480) {
-        this.width = e, this.height = t, this.canvas.width = e, this.canvas.height = t, this.gl.viewport(0, 0, e, t), this.commonUniforms.resolution.value = [e, t], this.commonUniforms.aspectRatio.value = e / t, this.debug("MiniGL.setSize", {
-            width: e,
-            height: t
+    setSize(width = 640, height = 480) {
+        this.width = width, this.height = height, this.canvas.width = width, this.canvas.height = height, this.gl.viewport(0, 0, width, height), this.commonUniforms.resolution.value = [width, height], this.commonUniforms.aspectRatio.value = width / height, this.debug("MiniGL.setSize", {
+            width: width,
+            height: height
         })
     }
-    setOrthographicCamera(e = 0, t = 0, n = 0, i = -2e3, s = 2e3) {
-        this.commonUniforms.projectionMatrix.value = [2 / this.width, 0, 0, 0, 0, 2 / this.height, 0, 0, 0, 0, 2 / (i - s), 0, e, t, n, 1], this.debug("setOrthographicCamera", this.commonUniforms.projectionMatrix.value)
+    setOrthographicCamera(offsetX = 0, offsetY = 0, offsetZ = 0, near = -2000, far = 2000) {
+        this.commonUniforms.projectionMatrix.value = [2 / this.width, 0, 0, 0, 0, 2 / this.height, 0, 0, 0, 0, 2 / (near - far), 0, offsetX, offsetY, offsetZ, 1], this.debug("setOrthographicCamera", this.commonUniforms.projectionMatrix.value)
     }
     render() {
         this.gl.clearColor(0, 0, 0, 0), this.gl.clearDepth(1), this.meshes.forEach(e => e.draw())
@@ -233,35 +233,35 @@ class MiniGl {
 }
 class Gradient {
     constructor(...t) {
-        e(this, "el", void 0), e(this, "cssVarRetries", 0), e(this, "maxCssVarRetries", 200), e(this, "angle", 0), e(this, "isLoadedClass", !1), e(this, "isScrolling", !1), e(this, "scrollingTimeout", void 0), e(this, "scrollingRefreshDelay", 200), e(this, "isIntersecting", !1), e(this, "shaderFiles", void 0), e(this, "vertexShader", void 0), e(this, "sectionColors", void 0), e(this, "computedCanvasStyle", void 0), e(this, "conf", void 0), e(this, "uniforms", void 0), e(this, "t", 1253106), e(this, "last", 0), e(this, "width", void 0), e(this, "minWidth", 1111), e(this, "height", 600), e(this, "xSegCount", void 0), e(this, "ySegCount", void 0), e(this, "mesh", void 0), e(this, "material", void 0), e(this, "geometry", void 0), e(this, "minigl", void 0), e(this, "scrollObserver", void 0), e(this, "amp", 320), e(this, "seed", 5), e(this, "freqX", 14e-5 * 1.5), e(this, "freqY", 29e-5 * 1.5), e(this, "freqDelta", 1e-5), e(this, "activeColors", [1, 1, 1, 1]), e(this, "isMetaKey", !1), e(this, "isGradientLegendVisible", !1), e(this, "isMouseDown", !1), e(this, "handleScroll", () => {
+        defineProp(this, "el", void 0), defineProp(this, "cssVarRetries", 0), defineProp(this, "maxCssVarRetries", 200), defineProp(this, "angle", 0), defineProp(this, "isLoadedClass", !1), defineProp(this, "isScrolling", !1), defineProp(this, "scrollingTimeout", void 0), defineProp(this, "scrollingRefreshDelay", 200), defineProp(this, "isIntersecting", !1), defineProp(this, "shaderFiles", void 0), defineProp(this, "vertexShader", void 0), defineProp(this, "sectionColors", void 0), defineProp(this, "computedCanvasStyle", void 0), defineProp(this, "conf", void 0), defineProp(this, "uniforms", void 0), defineProp(this, "t", 1253106), defineProp(this, "last", 0), defineProp(this, "width", void 0), defineProp(this, "minWidth", 1111), defineProp(this, "height", 600), defineProp(this, "xSegCount", void 0), defineProp(this, "ySegCount", void 0), defineProp(this, "mesh", void 0), defineProp(this, "material", void 0), defineProp(this, "geometry", void 0), defineProp(this, "minigl", void 0), defineProp(this, "scrollObserver", void 0), defineProp(this, "amp", 320), defineProp(this, "seed", 5), defineProp(this, "freqX", 14e-5 * 1.5), defineProp(this, "freqY", 29e-5 * 1.5), defineProp(this, "freqDelta", 1e-5), defineProp(this, "activeColors", [1, 1, 1, 1]), defineProp(this, "isMetaKey", !1), defineProp(this, "isGradientLegendVisible", !1), defineProp(this, "isMouseDown", !1), defineProp(this, "handleScroll", () => {
             clearTimeout(this.scrollingTimeout), this.scrollingTimeout = setTimeout(this.handleScrollEnd, this.scrollingRefreshDelay), this.isGradientLegendVisible && this.hideGradientLegend(), this.conf.playing && (this.isScrolling = !0, this.pause())
-        }), e(this, "handleScrollEnd", () => {
+        }), defineProp(this, "handleScrollEnd", () => {
             this.isScrolling = !1, this.isIntersecting && this.play()
-        }), e(this, "resize", () => {
+        }), defineProp(this, "resize", () => {
             this.width = window.innerWidth, this.minigl.setSize(this.width, this.height), this.minigl.setOrthographicCamera(), this.xSegCount = Math.ceil(this.width * this.conf.density[0]), this.ySegCount = Math.ceil(this.height * this.conf.density[1]), this.mesh.geometry.setTopology(this.xSegCount, this.ySegCount), this.mesh.geometry.setSize(this.width, this.height), this.mesh.material.uniforms.u_shadow_power.value = this.width < 600 ? 5 : 6
-        }), e(this, "handleMouseDown", e => {
-            this.isGradientLegendVisible && (this.isMetaKey = e.metaKey, this.isMouseDown = !0, !1 === this.conf.playing && requestAnimationFrame(this.animate))
-        }), e(this, "handleMouseUp", () => {
+        }), defineProp(this, "handleMouseDown", event => {
+            this.isGradientLegendVisible && (this.isMetaKey = event.metaKey, this.isMouseDown = !0, !1 === this.conf.playing && requestAnimationFrame(this.animate))
+        }), defineProp(this, "handleMouseUp", () => {
             this.isMouseDown = !1
-        }), e(this, "animate", e => {
-            if (!this.shouldSkipFrame(e) || this.isMouseDown) {
-                if (this.t += Math.min(e - this.last, 1e3 / 15), this.last = e, this.isMouseDown) {
-                    let e = 160;
-                    this.isMetaKey && (e = -160), this.t += e
+        }), defineProp(this, "animate", timestamp => {
+            if (!this.shouldSkipFrame(timestamp) || this.isMouseDown) {
+                if (this.t += Math.min(timestamp - this.last, 1e3 / 15), this.last = timestamp, this.isMouseDown) {
+                    let delta = 160;
+                    this.isMetaKey && (delta = -160), this.t += delta
                 }
                 this.mesh.material.uniforms.u_time.value = this.t, this.minigl.render()
             }
             if (0 !== this.last && this.isStatic) return this.minigl.render(), void this.disconnect();
             (this.conf.playing || this.isMouseDown) && requestAnimationFrame(this.animate)
-        }), e(this, "addIsLoadedClass", () => {
+        }), defineProp(this, "addIsLoadedClass", () => {
             !this.isLoadedClass && (this.isLoadedClass = !0, this.el.classList.add("isLoaded"), setTimeout(() => {
                 this.el.parentElement.classList.add("isLoaded")
             }, 3e3))
-        }), e(this, "pause", () => {
+        }), defineProp(this, "pause", () => {
             this.conf.playing = false
-        }), e(this, "play", () => {
+        }), defineProp(this, "play", () => {
             requestAnimationFrame(this.animate), this.conf.playing = true
-        }), e(this, "initGradient", (selector) => {
+        }), defineProp(this, "initGradient", (selector) => {
             this.el = document.querySelector(selector);
             this.connect();
             return this;
@@ -390,11 +390,11 @@ class Gradient {
     initMesh() {
         this.material = this.initMaterial(), this.geometry = new this.minigl.PlaneGeometry, this.mesh = new this.minigl.Mesh(this.geometry, this.material)
     }
-    shouldSkipFrame(e) {
-        return !!window.document.hidden || (!this.conf.playing || (parseInt(e, 10) % 2 == 0 || void 0))
+    shouldSkipFrame(timestamp) {
+        return !!window.document.hidden || (!this.conf.playing || (parseInt(timestamp, 10) % 2 == 0 || void 0))
     }
-    updateFrequency(e) {
-        this.freqX += e, this.freqY += e
+    updateFrequency(delta) {
+        this.freqX += delta, this.freqY += delta
     }
     toggleColor(index) {
         this.activeColors[index] = 0 === this.activeColors[index] ? 1 : 0
