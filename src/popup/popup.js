@@ -914,7 +914,9 @@ function PopupView() {
 		}
         var music_info_html = renderTemplate(_music_info_template_str, song);
         setContent(document.getElementById('initial_screen_info'), music_info_html, function() {
-                recognitionHistory.unshift(song);
+                if (!recognitionHistory.length || recognitionHistory[0].timestamp !== song.timestamp) {
+                        recognitionHistory.unshift(song);
+                }
                 var history_html = renderTemplate(_list_template_str, {"history": recognitionHistory});
             setContent(document.getElementById('history-on-result'), history_html, function() {
                 loadCoverImages();
