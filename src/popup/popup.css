@@ -39,6 +39,47 @@ body {
     display: none;
 }
 
+#consent_screen {
+    padding: 15px;
+    color: #333;
+    background: white;
+    overflow-y: auto;
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    z-index: 1;
+    text-align: justify;
+}
+
+#consent_screen .consent-content {
+    max-width: 260px;
+    margin: 0;
+}
+
+#consent_screen a {
+    color: #315EFF;
+}
+
+#consent_screen h1 {
+    font-size: 20px;
+    margin: 0 0 15px;
+    text-align: center;
+}
+
+#consent_screen p {
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 0 0 10px;
+}
+
+#consent_screen .consent-buttons {
+    text-align: center;
+}
+#consent_screen button {
+    margin-top: 10px;
+    /*min-width: 100px;*/
+}
+
 /* HEADER/MESSAGES */
 
 #main_header {
@@ -1278,9 +1319,9 @@ canvas#canvas {
 .button.button--secondary {
     color: var(--ifm-color-gray-100);
 }
-.button.button--secondary:not(.button--active):not(:hover):not(:focus):not(.focus-visible) {
+/*.button.button--secondary:not(.button--active):not(:hover):not(:focus):not(.focus-visible) {
     color: var(--ifm-color-gray-900);
-}
+}*/
 
 .bottom-content {
     position: relative;  

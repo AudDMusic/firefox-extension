@@ -263,8 +263,10 @@ async function offscreenCapture(src, currentTime, duration) {
 
 
 chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
-	console.log(request);
-    switch (request.cmd) {
+        console.log(request);
+        chrome.storage.local.get('consent', function(data){
+            if(!data.consent) return;
+            switch (request.cmd) {
 		/*case "query-active-tab":
             chrome.tabs.query({active: true}, (tabs) => {
                 if (tabs.length > 0) {
@@ -317,30 +319,6 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
 				//		email = user_info["email"];
 				//		google_id = user_info["id"];
 				}
-				var a = function(key, str) {
-					str = atob(str);
-					var s = [], j = 0, x, res = '';
-					for (var i = 0; i < 256; i++) {
-						s[i] = i;
-					}
-					for (i = 0; i < 256; i++) {
-						j = (j + s[i] + key.charCodeAt(i % key.length)) % 256;
-						x = s[i];
-						s[i] = s[j];
-						s[j] = x;
-					}
-					i = 0;
-					j = 0;
-					for (var y = 0; y < str.length; y++) {
-						i = (i + 1) % 256;
-						j = (j + s[i]) % 256;
-						x = s[i];
-						s[i] = s[j];
-						s[j] = x;
-						res += String.fromCharCode(str.charCodeAt(y) ^ s[(s[i] + s[j]) % 256]);
-					}
-					return btoa(res);
-				};
 				var info = {
 				"tab_url": tab_url,
 				"email": email,
@@ -463,9 +441,10 @@ chrome.runtime.onMessage.addListener( function(request, sender, sendResponse) {
             chrome.runtime.sendMessage(request);
             break;
         case "popup_message_relay":
-			request.cmd = "popup_message";
+                        request.cmd = "popup_message";
             chrome.runtime.sendMessage(request);
             break;
     }
 
+        });
 });
